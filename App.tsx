@@ -1,42 +1,50 @@
+import { useEffect, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from './lib/supabase';
+import LoginScreen from './screens/LoginScreen';
 
 export default function App() {
+  const [session, setSession] = useState<Session | null>(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setChecking(false);
+    });
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      setSession(newSession);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  if (checking) {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (!session) return <LoginScreen />;
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>CodeKantin 🍽️</Text>
-      <Text style={styles.subtitle}>Belajar Stack dan Queue lewat restoran</Text>
-
-      <View style={[styles.card, { backgroundColor: '#DBEAFE' }]}>
-        <Text style={styles.cardTitle}>Antrean Kasir</Text>
-        <Text>Queue / FIFO</Text>
-      </View>
-
-      <View style={[styles.card, { backgroundColor: '#FFEDD5' }]}>
-        <Text style={styles.cardTitle}>Tumpukan Piring</Text>
-        <Text>Stack / LIFO</Text>
-      </View>
-
+    <View style={styles.center}>
+      <Text style={styles.title}>Halo! 👋</Text>
+      <Text>Kamu masuk sebagai {session.user.email}</Text>
+      <TouchableOpacity style={styles.button} onPress={() => supabase.auth.signOut()}>
+        <Text style={styles.buttonText}>Keluar</Text>
+      </TouchableOpacity>
       <StatusBar style="auto" />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#FFF8E7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  title: { fontSize: 32, fontWeight: 'bold', marginBottom: 8 },
-  subtitle: { fontSize: 16, color: '#555', marginBottom: 32 },
-  card: {
-    width: '100%',
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 16,
-  },
-  cardTitle: { fontSize: 20, fontWeight: '600', marginBottom: 4 },
+  center: { flex: 1, backgroundColor: '#FFF8E7', alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
+  button: { backgroundColor: '#DC2626', borderRadius: 12, padding: 12, marginTop: 20 },
+  buttonText: { color: '#fff', fontWeight: '600' },
 });

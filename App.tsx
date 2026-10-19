@@ -1,24 +1,40 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import LoginScreen from './screens/LoginScreen';
+import NicknameScreen from './screens/NicknameScreen';
+
+type Profile = { nickname: string; total_xp: number; total_points: number };
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [checking, setChecking] = useState(true);
 
+  const muatProfil = useCallback(async (userId: string) => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('nickname, total_xp, total_points')
+      .eq('id', userId)
+      .maybeSingle();
+    setProfile(data);
+  }, []);
+
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       setSession(data.session);
+      if (data.session) await muatProfil(data.session.user.id);
       setChecking(false);
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
+      if (newSession) muatProfil(newSession.user.id);
+      else setProfile(null);
     });
     return () => listener.subscription.unsubscribe();
-  }, []);
+  }, [muatProfil]);
 
   if (checking) {
     return (
@@ -30,10 +46,19 @@ export default function App() {
 
   if (!session) return <LoginScreen />;
 
+  if (!profile) {
+    return (
+      <NicknameScreen
+        userId={session.user.id}
+        onSaved={() => muatProfil(session.user.id)}
+      />
+    );
+  }
+
   return (
     <View style={styles.center}>
-      <Text style={styles.title}>Halo! 👋</Text>
-      <Text>Kamu masuk sebagai {session.user.email}</Text>
+      <Text style={styles.title}>Halo, {profile.nickname} 👋</Text>
+      <Text>⭐ {profile.total_points} poin · ⚡ {profile.total_xp} XP</Text>
       <TouchableOpacity style={styles.button} onPress={() => supabase.auth.signOut()}>
         <Text style={styles.buttonText}>Keluar</Text>
       </TouchableOpacity>

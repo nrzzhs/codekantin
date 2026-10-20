@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
 
-export default function LoginScreen() {
+type Props = { onForgot: () => void };
+export default function LoginScreen({ onForgot }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isDaftar, setIsDaftar] = useState(false);
@@ -65,6 +66,12 @@ export default function LoginScreen() {
           {loading ? 'Memproses...' : isDaftar ? 'Daftar' : 'Masuk'}
         </Text>
       </TouchableOpacity>
+
+      {!isDaftar && (
+        <TouchableOpacity onPress={onForgot}>
+          <Text style={styles.link}>Lupa password?</Text>
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity onPress={() => setIsDaftar(!isDaftar)}>
         <Text style={styles.link}>

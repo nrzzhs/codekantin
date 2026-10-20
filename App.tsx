@@ -3,10 +3,12 @@ import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import type { Profile } from './lib/types';
+import { warna } from './lib/tema';
 import LoginScreen from './screens/LoginScreen';
 import NicknameScreen from './screens/NicknameScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
@@ -15,11 +17,76 @@ import AntreanScreen from './screens/AntreanScreen';
 import TumpukanScreen from './screens/TumpukanScreen';
 import TebakScreen from './screens/TebakScreen';
 import ProfilScreen from './screens/ProfilScreen';
+import BandingkanScreen from './screens/BandingkanScreen';
 
 const Tab = createBottomTabNavigator();
+const Stack = createNativeStackNavigator();
 
 function Ikon({ emoji, fokus }: { emoji: string; fokus: boolean }) {
   return <Text style={{ fontSize: 20, opacity: fokus ? 1 : 0.5 }}>{emoji}</Text>;
+}
+
+type TabsProps = {
+  userId: string;
+  email: string;
+  profile: Profile;
+  muatProfil: () => Promise<void>;
+};
+
+function Tabs({ userId, email, profile, muatProfil }: TabsProps) {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarActiveTintColor: '#C2410C',
+        tabBarStyle: { backgroundColor: '#FFFDF9' },
+      }}
+    >
+      <Tab.Screen
+        name="Beranda"
+        options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🏠" fokus={focused} /> }}
+      >
+        {() => (
+          <BerandaScreen
+            nickname={profile.nickname}
+            avatarUrl={profile.avatar_url}
+            points={profile.total_points}
+            xp={profile.total_xp}
+            onRefresh={muatProfil}
+          />
+        )}
+      </Tab.Screen>
+      <Tab.Screen
+        name="Antrean"
+        component={AntreanScreen}
+        options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🧾" fokus={focused} /> }}
+      />
+      <Tab.Screen
+        name="Tumpukan"
+        component={TumpukanScreen}
+        options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🍽️" fokus={focused} /> }}
+      />
+      <Tab.Screen
+        name="Tebak"
+        component={TebakScreen}
+        options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🎯" fokus={focused} /> }}
+      />
+      <Tab.Screen
+        name="Profil"
+        options={{ tabBarIcon: ({ focused }) => <Ikon emoji="👤" fokus={focused} /> }}
+      >
+        {() => (
+          <ProfilScreen
+            userId={userId}
+            email={email}
+            profile={profile}
+            onUpdated={muatProfil}
+            onLogout={() => supabase.auth.signOut()}
+          />
+        )}
+      </Tab.Screen>
+    </Tab.Navigator>
+  );
 }
 
 export default function App() {
@@ -75,61 +142,32 @@ export default function App() {
     );
   }
 
+  const userId = session.user.id;
+
   return (
     <SafeAreaProvider>
       <NavigationContainer>
-        <Tab.Navigator
-          screenOptions={{
-            headerShown: false,
-            tabBarActiveTintColor: '#2563EB',
-            tabBarStyle: { backgroundColor: '#FFFDF5' },
-          }}
-        >
-          <Tab.Screen
-            name="Beranda"
-            options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🏠" fokus={focused} /> }}
-          >
+        <Stack.Navigator>
+          <Stack.Screen name="Tabs" options={{ headerShown: false }}>
             {() => (
-              <BerandaScreen
-                nickname={profile.nickname}
-                fullName={profile.full_name}
-                school={profile.school}
-                avatarUrl={profile.avatar_url}
-                points={profile.total_points}
-                xp={profile.total_xp}
-              />
-            )}
-          </Tab.Screen>
-          <Tab.Screen
-            name="Antrean"
-            component={AntreanScreen}
-            options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🧾" fokus={focused} /> }}
-          />
-          <Tab.Screen
-            name="Tumpukan"
-            component={TumpukanScreen}
-            options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🍽️" fokus={focused} /> }}
-          />
-          <Tab.Screen
-            name="Tebak"
-            component={TebakScreen}
-            options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🎯" fokus={focused} /> }}
-          />
-          <Tab.Screen
-            name="Profil"
-            options={{ tabBarIcon: ({ focused }) => <Ikon emoji="👤" fokus={focused} /> }}
-          >
-            {() => (
-              <ProfilScreen
-                userId={session.user.id}
+              <Tabs
+                userId={userId}
                 email={session.user.email ?? ''}
                 profile={profile}
-                onUpdated={() => muatProfil(session.user.id)}
-                onLogout={() => supabase.auth.signOut()}
+                muatProfil={() => muatProfil(userId)}
               />
             )}
-          </Tab.Screen>
-        </Tab.Navigator>
+          </Stack.Screen>
+          <Stack.Screen
+            name="Bandingkan"
+            component={BandingkanScreen}
+            options={{
+              title: 'Bandingkan Stack vs Queue',
+              headerStyle: { backgroundColor: warna.latar },
+              headerShadowVisible: false,
+            }}
+          />
+        </Stack.Navigator>
         <StatusBar style="auto" />
       </NavigationContainer>
     </SafeAreaProvider>
@@ -137,5 +175,5 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, backgroundColor: '#FFF8E7', alignItems: 'center', justifyContent: 'center' },
+  center: { flex: 1, backgroundColor: warna.latar, alignItems: 'center', justifyContent: 'center' },
 });

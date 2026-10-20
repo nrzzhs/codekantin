@@ -5,6 +5,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import LoginScreen from './screens/LoginScreen';
 import NicknameScreen from './screens/NicknameScreen';
+import ResetPasswordScreen from './screens/ResetPasswordScreen';
 
 type Profile = { nickname: string; total_xp: number; total_points: number };
 
@@ -12,6 +13,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [checking, setChecking] = useState(true);
+  const [showReset, setShowReset] = useState(false);
 
   const muatProfil = useCallback(async (userId: string) => {
     const { data } = await supabase
@@ -44,7 +46,11 @@ export default function App() {
     );
   }
 
-  if (!session) return <LoginScreen />;
+  if (showReset) {
+    return <ResetPasswordScreen onDone={() => setShowReset(false)} />;
+  }
+
+  if (!session) return <LoginScreen onForgot={() => setShowReset(true)} />;
 
   if (!profile) {
     return (

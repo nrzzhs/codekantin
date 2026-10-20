@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
+import type { Profile } from './lib/types';
 import LoginScreen from './screens/LoginScreen';
 import NicknameScreen from './screens/NicknameScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
@@ -13,8 +14,7 @@ import BerandaScreen from './screens/BerandaScreen';
 import AntreanScreen from './screens/AntreanScreen';
 import TumpukanScreen from './screens/TumpukanScreen';
 import TebakScreen from './screens/TebakScreen';
-
-type Profile = { nickname: string; total_xp: number; total_points: number };
+import ProfilScreen from './screens/ProfilScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -31,7 +31,7 @@ export default function App() {
   const muatProfil = useCallback(async (userId: string) => {
     const { data } = await supabase
       .from('profiles')
-      .select('nickname, total_xp, total_points')
+      .select('nickname, full_name, school, grade, bio, avatar_url, total_xp, total_points')
       .eq('id', userId)
       .maybeSingle();
     setProfile(data);
@@ -92,9 +92,11 @@ export default function App() {
             {() => (
               <BerandaScreen
                 nickname={profile.nickname}
+                fullName={profile.full_name}
+                school={profile.school}
+                avatarUrl={profile.avatar_url}
                 points={profile.total_points}
                 xp={profile.total_xp}
-                onLogout={() => supabase.auth.signOut()}
               />
             )}
           </Tab.Screen>
@@ -113,6 +115,20 @@ export default function App() {
             component={TebakScreen}
             options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🎯" fokus={focused} /> }}
           />
+          <Tab.Screen
+            name="Profil"
+            options={{ tabBarIcon: ({ focused }) => <Ikon emoji="👤" fokus={focused} /> }}
+          >
+            {() => (
+              <ProfilScreen
+                userId={session.user.id}
+                email={session.user.email ?? ''}
+                profile={profile}
+                onUpdated={() => muatProfil(session.user.id)}
+                onLogout={() => supabase.auth.signOut()}
+              />
+            )}
+          </Tab.Screen>
         </Tab.Navigator>
         <StatusBar style="auto" />
       </NavigationContainer>

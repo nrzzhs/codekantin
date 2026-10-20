@@ -1,13 +1,26 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import LoginScreen from './screens/LoginScreen';
 import NicknameScreen from './screens/NicknameScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
+import BerandaScreen from './screens/BerandaScreen';
+import AntreanScreen from './screens/AntreanScreen';
+import TumpukanScreen from './screens/TumpukanScreen';
+import TebakScreen from './screens/TebakScreen';
 
 type Profile = { nickname: string; total_xp: number; total_points: number };
+
+const Tab = createBottomTabNavigator();
+
+function Ikon({ emoji, fokus }: { emoji: string; fokus: boolean }) {
+  return <Text style={{ fontSize: 20, opacity: fokus ? 1 : 0.5 }}>{emoji}</Text>;
+}
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -46,6 +59,7 @@ export default function App() {
     );
   }
 
+  // Harus sebelum cek session, karena verifikasi kode membuat sesi login otomatis
   if (showReset) {
     return <ResetPasswordScreen onDone={() => setShowReset(false)} />;
   }
@@ -62,20 +76,50 @@ export default function App() {
   }
 
   return (
-    <View style={styles.center}>
-      <Text style={styles.title}>Halo, {profile.nickname} 👋</Text>
-      <Text>⭐ {profile.total_points} poin · ⚡ {profile.total_xp} XP</Text>
-      <TouchableOpacity style={styles.button} onPress={() => supabase.auth.signOut()}>
-        <Text style={styles.buttonText}>Keluar</Text>
-      </TouchableOpacity>
-      <StatusBar style="auto" />
-    </View>
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <Tab.Navigator
+          screenOptions={{
+            headerShown: false,
+            tabBarActiveTintColor: '#2563EB',
+            tabBarStyle: { backgroundColor: '#FFFDF5' },
+          }}
+        >
+          <Tab.Screen
+            name="Beranda"
+            options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🏠" fokus={focused} /> }}
+          >
+            {() => (
+              <BerandaScreen
+                nickname={profile.nickname}
+                points={profile.total_points}
+                xp={profile.total_xp}
+                onLogout={() => supabase.auth.signOut()}
+              />
+            )}
+          </Tab.Screen>
+          <Tab.Screen
+            name="Antrean"
+            component={AntreanScreen}
+            options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🧾" fokus={focused} /> }}
+          />
+          <Tab.Screen
+            name="Tumpukan"
+            component={TumpukanScreen}
+            options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🍽️" fokus={focused} /> }}
+          />
+          <Tab.Screen
+            name="Tebak"
+            component={TebakScreen}
+            options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🎯" fokus={focused} /> }}
+          />
+        </Tab.Navigator>
+        <StatusBar style="auto" />
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
   center: { flex: 1, backgroundColor: '#FFF8E7', alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 24, fontWeight: 'bold', marginBottom: 8 },
-  button: { backgroundColor: '#DC2626', borderRadius: 12, padding: 12, marginTop: 20 },
-  buttonText: { color: '#fff', fontWeight: '600' },
 });

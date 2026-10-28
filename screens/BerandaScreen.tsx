@@ -61,7 +61,7 @@ export default function BerandaScreen({ nickname, avatarUrl, points, xp, onRefre
           </TouchableOpacity>
 
           <View style={styles.headerTeks}>
-            <Text style={styles.merek}>DAPUR ALGORITMA</Text>
+            <Text style={styles.merek}>CODE KANTIN</Text>
             <Text style={styles.sapaan} numberOfLines={1}>Halo, {nickname}! 👋</Text>
           </View>
 

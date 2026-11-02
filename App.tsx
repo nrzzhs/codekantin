@@ -9,6 +9,7 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
 import type { Profile } from './lib/types';
 import { warna } from './lib/tema';
+import { SimulatorProvider } from './context/SimulatorContext';
 import LoginScreen from './screens/LoginScreen';
 import NicknameScreen from './screens/NicknameScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
@@ -146,30 +147,32 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
-        <Stack.Navigator>
-          <Stack.Screen name="Tabs" options={{ headerShown: false }}>
-            {() => (
-              <Tabs
-                userId={userId}
-                email={session.user.email ?? ''}
-                profile={profile}
-                muatProfil={() => muatProfil(userId)}
-              />
-            )}
-          </Stack.Screen>
-          <Stack.Screen
-            name="Bandingkan"
-            component={BandingkanScreen}
-            options={{
-              title: 'Bandingkan Stack vs Queue',
-              headerStyle: { backgroundColor: warna.latar },
-              headerShadowVisible: false,
-            }}
-          />
-        </Stack.Navigator>
-        <StatusBar style="auto" />
-      </NavigationContainer>
+      <SimulatorProvider userId={userId}>
+        <NavigationContainer>
+          <Stack.Navigator>
+            <Stack.Screen name="Tabs" options={{ headerShown: false }}>
+              {() => (
+                <Tabs
+                  userId={userId}
+                  email={session.user.email ?? ''}
+                  profile={profile}
+                  muatProfil={() => muatProfil(userId)}
+                />
+              )}
+            </Stack.Screen>
+            <Stack.Screen
+              name="Bandingkan"
+              component={BandingkanScreen}
+              options={{
+                title: 'Bandingkan Stack vs Queue',
+                headerStyle: { backgroundColor: warna.latar },
+                headerShadowVisible: false,
+              }}
+            />
+          </Stack.Navigator>
+          <StatusBar style="auto" />
+        </NavigationContainer>
+      </SimulatorProvider>
     </SafeAreaProvider>
   );
 }

@@ -1,3 +1,5 @@
+import { KAPASITAS } from '../context/SimulatorContext';
+
 // ===== Modul =====
 export type RuteModul = 'Antrean' | 'Tumpukan' | 'Tebak';
 
@@ -45,27 +47,28 @@ export const DAFTAR_MODUL: Modul[] = [
   },
 ];
 
-// ===== Contoh isi struktur data (sementara, nanti dari simulator) =====
-export const CONTOH_ANTREAN: string[] = ['Meja Kasir #1', 'Meja Kasir #2']; // depan → belakang
-export const CONTOH_TUMPUKAN: string[] = ['Piring Keramik #1', 'Piring Keramik #2', 'Piring Keramik #3']; // dasar → atas
-export const KAPASITAS_TUMPUKAN = 5;
-
+// ===== Pengaturan Mode Tebak =====
 export const POIN_PER_TANTANGAN = 20;
 export const INSTRUKSI_TEBAK = ['push', 'enqueue', 'pop'];
 
-export function ringkasanModul(id: RuteModul): { kiri: string; kanan: string } {
+// ===== Ringkasan kartu modul (dari isi simulator yang asli) =====
+export function ringkasanModul(
+  id: RuteModul,
+  isiAntrean: string[],
+  isiTumpukan: string[],
+): { kiri: string; kanan: string } {
   if (id === 'Antrean') {
-    const depan = CONTOH_ANTREAN[0];
+    const depan = isiAntrean[0];
     return {
       kiri: depan ? `FRONT: ${depan}` : 'FRONT: (kosong)',
-      kanan: `${CONTOH_ANTREAN.length} Menunggu`,
+      kanan: `${isiAntrean.length} Menunggu`,
     };
   }
   if (id === 'Tumpukan') {
-    const atas = CONTOH_TUMPUKAN[CONTOH_TUMPUKAN.length - 1];
+    const atas = isiTumpukan[isiTumpukan.length - 1];
     return {
       kiri: atas ? `TOP: ${atas}` : 'TOP: (kosong)',
-      kanan: `Tinggi: ${CONTOH_TUMPUKAN.length}/${KAPASITAS_TUMPUKAN}`,
+      kanan: `Tinggi: ${isiTumpukan.length}/${KAPASITAS}`,
     };
   }
   return {

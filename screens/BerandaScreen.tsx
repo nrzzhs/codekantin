@@ -6,10 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import KartuModul from '../components/KartuModul';
 import { warna } from '../lib/tema';
-import {
-  DAFTAR_MODUL, FAKTA, hitungLencana, ringkasanModul,
-  CONTOH_ANTREAN, CONTOH_TUMPUKAN,
-} from '../data/beranda';
+import { DAFTAR_MODUL, FAKTA, hitungLencana, ringkasanModul } from '../data/beranda';
+import { useAntrean, useTumpukan } from '../context/SimulatorContext';
 
 type Props = {
   nickname: string;
@@ -29,6 +27,9 @@ function faktaAcak(kecuali?: number) {
 
 export default function BerandaScreen({ nickname, avatarUrl, points, xp, onRefresh }: Props) {
   const navigation = useNavigation<any>();
+  const isiAntrean = useAntrean().tampil.isi;
+  const isiTumpukan = useTumpukan().tampil.isi;
+
   const [refreshing, setRefreshing] = useState(false);
   const [indeksFakta, setIndeksFakta] = useState(() => faktaAcak());
   const [fotoError, setFotoError] = useState(false);
@@ -92,7 +93,7 @@ export default function BerandaScreen({ nickname, avatarUrl, points, xp, onRefre
         <Text style={styles.bagianSub}>Pilih konsep untuk mulai simulasi interaktif</Text>
 
         {DAFTAR_MODUL.map((m) => {
-          const r = ringkasanModul(m.id);
+          const r = ringkasanModul(m.id, isiAntrean, isiTumpukan);
           return (
             <KartuModul
               key={m.id}
@@ -130,7 +131,7 @@ export default function BerandaScreen({ nickname, avatarUrl, points, xp, onRefre
               <View style={[styles.miniPil, { backgroundColor: '#BAE6FD' }]}>
                 <Text style={styles.miniPilTeks}>↔️ Depan & Belakang</Text>
               </View>
-              <Text style={styles.miniJumlah}>{CONTOH_ANTREAN.length} elemen</Text>
+              <Text style={styles.miniJumlah}>{isiAntrean.length} elemen</Text>
             </View>
             <View style={[styles.mini, { backgroundColor: warna.oranyeMuda, borderColor: '#FED7AA' }]}>
               <Text style={[styles.miniJudul, { color: '#C2410C' }]}>STACK</Text>
@@ -138,7 +139,7 @@ export default function BerandaScreen({ nickname, avatarUrl, points, xp, onRefre
               <View style={[styles.miniPil, { backgroundColor: '#FED7AA' }]}>
                 <Text style={styles.miniPilTeks}>⬆️ Puncak Saja (TOP)</Text>
               </View>
-              <Text style={styles.miniJumlah}>{CONTOH_TUMPUKAN.length} elemen</Text>
+              <Text style={styles.miniJumlah}>{isiTumpukan.length} elemen</Text>
             </View>
           </View>
 

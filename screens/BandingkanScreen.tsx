@@ -1,9 +1,8 @@
-import { useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { Stack } from '../logic/Stack';
 import { Queue } from '../logic/Queue';
 import { warna } from '../lib/tema';
-import { KAPASITAS } from '../context/SimulatorContext';
+import { KAPASITAS, useBandingkan } from '../context/SimulatorContext';
 
 const BAHAN = [
   { nama: 'Burger', emoji: '🍔' },
@@ -12,10 +11,12 @@ const BAHAN = [
 ];
 
 export default function BandingkanScreen() {
-  const [masuk, setMasuk] = useState<string[]>([]);
-  const [dikeluarkan, setDikeluarkan] = useState(false);
+  const { nilai, setNilai, siap } = useBandingkan();
+  const masuk = Array.isArray(nilai.masuk) ? nilai.masuk : [];
+  const dikeluarkan = !!nilai.dikeluarkan;
 
   const penuh = masuk.length >= KAPASITAS;
+  const terkunci = !siap || dikeluarkan || penuh;
 
   // Teruskan input yang sama ke Queue dan Stack
   const queue = new Queue<string>();
@@ -25,7 +26,7 @@ export default function BandingkanScreen() {
     stack.push(x);
   }
 
-  const isiQueue = dikeluarkan ? [] : queue.toArray();        // FRONT → REAR
+  const isiQueue = dikeluarkan ? [] : queue.toArray();           // FRONT → REAR
   const isiStack = dikeluarkan ? [] : stack.toArray().reverse(); // TOP → DASAR
 
   const keluarQueue: string[] = [];
@@ -36,14 +37,18 @@ export default function BandingkanScreen() {
   }
 
   function tambah(nama: string, emoji: string) {
-    if (dikeluarkan || penuh) return;
+    if (terkunci) return;
     const huruf = String.fromCharCode(65 + masuk.length);
-    setMasuk([...masuk, `${emoji} ${nama} (${huruf})`]);
+    setNilai({ masuk: [...masuk, `${emoji} ${nama} (${huruf})`], dikeluarkan: false });
+  }
+
+  function keluarkan() {
+    if (!siap || masuk.length === 0 || dikeluarkan) return;
+    setNilai({ masuk, dikeluarkan: true });
   }
 
   function ulangi() {
-    setMasuk([]);
-    setDikeluarkan(false);
+    setNilai({ masuk: [], dikeluarkan: false });
   }
 
   let kesimpulan = 'Pilih bahan di atas, lalu tekan Keluarkan Semua.';
@@ -69,9 +74,9 @@ export default function BandingkanScreen() {
           {BAHAN.map((b) => (
             <TouchableOpacity
               key={b.nama}
-              style={[styles.bahan, (dikeluarkan || penuh) && styles.mati]}
+              style={[styles.bahan, terkunci && styles.mati]}
               onPress={() => tambah(b.nama, b.emoji)}
-              disabled={dikeluarkan || penuh}
+              disabled={terkunci}
             >
               <Text style={styles.bahanEmoji}>{b.emoji}</Text>
               <Text style={styles.bahanNama}>{b.nama}</Text>
@@ -132,9 +137,9 @@ export default function BandingkanScreen() {
 
       {/* Tombol */}
       <TouchableOpacity
-        style={[styles.tombolHijau, (masuk.length === 0 || dikeluarkan) && styles.mati]}
-        onPress={() => setDikeluarkan(true)}
-        disabled={masuk.length === 0 || dikeluarkan}
+        style={[styles.tombolHijau, (masuk.length === 0 || dikeluarkan || !siap) && styles.mati]}
+        onPress={keluarkan}
+        disabled={masuk.length === 0 || dikeluarkan || !siap}
       >
         <Text style={styles.tombolHijauTeks}>Keluarkan Semua (Dequeue & Pop)</Text>
       </TouchableOpacity>

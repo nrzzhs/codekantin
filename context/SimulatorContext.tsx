@@ -1,11 +1,29 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { useSimulator } from '../hooks/useSimulator';
 import { useTersimpan } from '../hooks/useTersimpan';
+import type { Miskonsepsi } from '../data/miskonsepsi';
 
 export const KAPASITAS = 5;
 
+// ===== Bandingkan =====
 export type StateBandingkan = { masuk: string[]; dikeluarkan: boolean };
 const AWAL_BANDINGKAN: StateBandingkan = { masuk: [], dikeluarkan: false };
+
+// ===== Tebak =====
+export type HasilSoal = {
+  idSoal: string;
+  jawaban: string[];
+  benar: boolean;
+  miskonsepsi: Miskonsepsi | null;
+};
+
+export type SesiTebak = {
+  idSoal: string[];            // soal dalam sesi ini, berurutan
+  indeks: number;              // soal yang sedang dikerjakan (0-based)
+  hasil: HasilSoal[];          // jawaban yang sudah diperiksa
+  draft: (string | null)[];    // jawaban yang sedang diisi
+  diperiksa: boolean;          // umpan balik sedang ditampilkan
+};
 
 type Nilai = {
   antrean: ReturnType<typeof useSimulator>;
@@ -13,6 +31,11 @@ type Nilai = {
   bandingkan: {
     nilai: StateBandingkan;
     setNilai: (n: StateBandingkan) => void;
+    siap: boolean;
+  };
+  tebak: {
+    nilai: SesiTebak | null;
+    setNilai: (n: SesiTebak | null) => void;
     siap: boolean;
   };
 };
@@ -26,8 +49,12 @@ export function SimulatorProvider({ userId, children }: { userId: string; childr
     `@codekantin/sim/${userId}/bandingkan`,
     AWAL_BANDINGKAN,
   );
+  const tebak = useTersimpan<SesiTebak | null>(`@codekantin/sim/${userId}/tebak`, null);
+
   return (
-    <Konteks.Provider value={{ antrean, tumpukan, bandingkan }}>{children}</Konteks.Provider>
+    <Konteks.Provider value={{ antrean, tumpukan, bandingkan, tebak }}>
+      {children}
+    </Konteks.Provider>
   );
 }
 
@@ -40,3 +67,4 @@ function useKonteks(): Nilai {
 export const useAntrean = () => useKonteks().antrean;
 export const useTumpukan = () => useKonteks().tumpukan;
 export const useBandingkan = () => useKonteks().bandingkan;
+export const useTebak = () => useKonteks().tebak;

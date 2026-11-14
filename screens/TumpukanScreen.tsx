@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTumpukan, KAPASITAS } from '../context/SimulatorContext';
+import PanelPseudocode from '../components/PanelPseudocode';
 import { warna, fontKode } from '../lib/tema';
 
 const JENIS = ['Keramik', 'Kaca', 'Melamin', 'Porselen', 'Kayu'];
@@ -109,6 +110,15 @@ export default function TumpukanScreen() {
           </Text>
         )}
 
+        {/* Sorotan baris pseudocode */}
+        <PanelPseudocode
+          jenis="stack"
+          op={tampil.op}
+          galat={tampil.galat}
+          kunci={sim.versi}
+          aksen={warna.oranye}
+        />
+
         {/* Panel status struktur data */}
         <View style={styles.kode}>
           <Text style={styles.kodeJudul}>Status Struktur Data</Text>
@@ -201,7 +211,7 @@ const styles = StyleSheet.create({
   langkah: { color: warna.teksRedup, fontWeight: '600' },
   catatanReplay: { color: warna.persikTeks, fontSize: 12, marginBottom: 8 },
 
-  kode: { backgroundColor: warna.gelap, borderRadius: 16, padding: 16, marginTop: 8 },
+  kode: { backgroundColor: warna.gelap, borderRadius: 16, padding: 16, marginTop: 12 },
   kodeJudul: { color: '#FDBA74', fontWeight: '800', fontSize: 12, marginBottom: 8, letterSpacing: 0.5 },
   kodeBaris: { color: '#E2E8F0', fontFamily: fontKode, fontSize: 13, lineHeight: 22 },
 

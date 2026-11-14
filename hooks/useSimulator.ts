@@ -3,12 +3,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Stack } from '../logic/Stack';
 import { Queue } from '../logic/Queue';
 import type { JenisStruktur } from '../logic/simulasi';
+import type { OperasiSim } from '../logic/pseudocode';
 
 export type Snapshot = {
   isi: string[];            // stack: dasar → TOP, queue: FRONT → REAR
   pesan: string;
   galat: 'underflow' | 'overflow' | null;
   keluar: string | null;
+  op?: OperasiSim;          // operasi yang menghasilkan snapshot ini (kosong untuk data lama)
 };
 
 const AWAL: Snapshot = {
@@ -32,6 +34,7 @@ export function useSimulator(
   const [riwayat, setRiwayat] = useState<Snapshot[]>([AWAL]);
   const [indeks, setIndeks] = useState(0);
   const [penghitung, setPenghitung] = useState(0); // jumlah elemen yang pernah berhasil ditambah
+  const [versi, setVersi] = useState(0);           // naik setiap tampilan berubah
   const [siap, setSiap] = useState(!kunciSimpan);
 
   const adalahStack = jenis === 'stack';
@@ -60,6 +63,7 @@ export function useSimulator(
             setRiwayat(data.riwayat);
             setIndeks(data.riwayat.length - 1);
             setPenghitung(data.penghitung ?? 0);
+            setVersi((v) => v + 1);
           }
         }
       } catch {
@@ -84,6 +88,7 @@ export function useSimulator(
     const baru = [...riwayat, snap].slice(-MAKS_RIWAYAT);
     setRiwayat(baru);
     setIndeks(baru.length - 1);
+    setVersi((v) => v + 1);
   }
 
   // push / enqueue. Mengembalikan true kalau berhasil.
@@ -97,6 +102,7 @@ export function useSimulator(
       pesan: berhasil ? op : `${op} gagal: ${wadah} penuh (overflow).`,
       galat: berhasil ? null : 'overflow',
       keluar: null,
+      op: 'tambah',
     });
     return berhasil;
   }
@@ -112,9 +118,16 @@ export function useSimulator(
         pesan: `${op} gagal: ${wadah} kosong (underflow).`,
         galat: 'underflow',
         keluar: null,
+        op: 'ambil',
       });
     } else {
-      catat({ isi: isiSaatIni(), pesan: `${op} → ${nilai}`, galat: null, keluar: nilai });
+      catat({
+        isi: isiSaatIni(),
+        pesan: `${op} → ${nilai}`,
+        galat: null,
+        keluar: nilai,
+        op: 'ambil',
+      });
     }
     return nilai;
   }
@@ -125,14 +138,17 @@ export function useSimulator(
     setRiwayat([AWAL]);
     setIndeks(0);
     setPenghitung(0);
+    setVersi((v) => v + 1);
   }
 
   function mundur() {
     setIndeks((i) => Math.max(0, i - 1));
+    setVersi((v) => v + 1);
   }
 
   function maju() {
     setIndeks((i) => Math.min(riwayat.length - 1, i + 1));
+    setVersi((v) => v + 1);
   }
 
   return {
@@ -142,6 +158,7 @@ export function useSimulator(
     diAkhir,
     siap,
     penghitung,
+    versi,
     kapasitas,
     tambah,
     ambil,

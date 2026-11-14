@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAntrean, KAPASITAS } from '../context/SimulatorContext';
+import PanelPseudocode from '../components/PanelPseudocode';
 import { warna, fontKode } from '../lib/tema';
 
 const NAMA = ['Andi', 'Budi', 'Citra', 'Dina', 'Eka', 'Fajar', 'Gita', 'Hana'];
@@ -111,6 +112,15 @@ export default function AntreanScreen() {
           </Text>
         )}
 
+        {/* Sorotan baris pseudocode */}
+        <PanelPseudocode
+          jenis="queue"
+          op={tampil.op}
+          galat={tampil.galat}
+          kunci={sim.versi}
+          aksen={warna.biru}
+        />
+
         {/* Panel inspeksi */}
         <View style={styles.kode}>
           <Text style={styles.kodeJudul}>Inspeksi Struktur Data</Text>
@@ -201,13 +211,11 @@ const styles = StyleSheet.create({
   langkah: { color: warna.teksRedup, fontWeight: '600' },
   catatanReplay: { color: warna.persikTeks, fontSize: 12, marginBottom: 8 },
 
-  kode: { backgroundColor: warna.gelap, borderRadius: 16, padding: 16, marginTop: 8 },
+  kode: { backgroundColor: warna.gelap, borderRadius: 16, padding: 16, marginTop: 12 },
   kodeJudul: { color: '#5EEAD4', fontWeight: '800', fontSize: 12, marginBottom: 8, letterSpacing: 0.5 },
   kodeBaris: { color: '#E2E8F0', fontFamily: fontKode, fontSize: 13, lineHeight: 22 },
 
-  reset: {
-    alignSelf: 'center', marginTop: 14, paddingHorizontal: 18, paddingVertical: 10,
-  },
+  reset: { alignSelf: 'center', marginTop: 14, paddingHorizontal: 18, paddingVertical: 10 },
   resetTeks: { color: warna.teksRedup, fontWeight: '700' },
 
   catatan: {

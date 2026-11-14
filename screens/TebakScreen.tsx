@@ -1,7 +1,9 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { supabase } from '../lib/supabase';
 import { warna, fontKode } from '../lib/tema';
-import { useTebak } from '../context/SimulatorContext';
+import { useTebak, useRiwayatTebak } from '../context/SimulatorContext';
 import type { SesiTebak, HasilSoal } from '../context/SimulatorContext';
 import { cariSoal } from '../data/soal';
 import type { Soal, SoalSimulasi, SoalPilihanGanda } from '../data/soal';
@@ -14,6 +16,13 @@ import {
   periksaSimulasi,
   periksaPilihanGanda,
 } from '../logic/tebak';
+import {
+  hitungHadiah,
+  ringkasRiwayat,
+  tambahCatatan,
+  tandaiTersinkron,
+} from '../logic/hadiah';
+import type { HasilRingkas } from '../logic/hadiah';
 
 const URUTAN = ['Pertama', 'Kedua', 'Ketiga', 'Keempat', 'Kelima', 'Keenam'];
 const MERAH = '#DC2626';
@@ -30,12 +39,36 @@ function namaItem(soal: SoalSimulasi, x: string): string {
   return soal.struktur === 'stack' ? `Piring ${x}` : `Pelanggan ${x}`;
 }
 
-export default function TebakScreen() {
+function buatIdSesi(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function ringkasHasil(h: HasilSoal): HasilRingkas {
+  return { idSoal: h.idSoal, benar: h.benar, miskonsepsi: h.miskonsepsi };
+}
+
+function namaMiskonsepsi(jenis: string): string {
+  return INFO_MISKONSEPSI[jenis as Miskonsepsi]?.judul ?? jenis;
+}
+
+type Props = { onProfilBerubah: () => Promise<void> };
+
+export default function TebakScreen({ onProfilBerubah }: Props) {
   const { nilai: sesi, setNilai: setSesi, siap } = useTebak();
+  const { nilai: riwayatMentah, setNilai: setRiwayat, siap: riwayatSiap } = useRiwayatTebak();
+
+  const riwayat = Array.isArray(riwayatMentah) ? riwayatMentah : [];
+  const riwayatRef = useRef(riwayat);
+  riwayatRef.current = riwayat;
+
+  const [mengirim, setMengirim] = useState(false);
+  const [galatKirim, setGalatKirim] = useState<string | null>(null);
+  const sedangKirim = useRef(false);
 
   // Sesi tersimpan dianggap tidak valid kalau soalnya sudah tidak ada di bank
   const sesiAktif: SesiTebak | null =
     sesi &&
+    typeof sesi.sesiId === 'string' &&
     Array.isArray(sesi.idSoal) &&
     Array.isArray(sesi.hasil) &&
     Array.isArray(sesi.draft) &&
@@ -44,10 +77,66 @@ export default function TebakScreen() {
       ? sesi
       : null;
 
+  const selesai = !!sesiAktif && sesiAktif.indeks >= sesiAktif.idSoal.length;
+  const jumlahTertunda = riwayat.filter((c) => !c.tersinkron).length;
+
+  // Kirim semua hasil sesi yang belum tercatat di Supabase (aman dipanggil berulang)
+  const kirimTertunda = useCallback(async () => {
+    if (sedangKirim.current) return;
+    const tertunda = riwayatRef.current.filter((c) => !c.tersinkron);
+    if (tertunda.length === 0) return;
+
+    sedangKirim.current = true;
+    setMengirim(true);
+    setGalatKirim(null);
+    let adaBerhasil = false;
+    try {
+      for (const c of tertunda) {
+        const { error } = await supabase.rpc('selesaikan_sesi_tebak', {
+          p_sesi_id: c.sesiId,
+          p_hasil: c.hasil,
+        });
+        if (error) {
+          setGalatKirim(error.message);
+          break;
+        }
+        adaBerhasil = true;
+        setRiwayat((r) => tandaiTersinkron(r, c.sesiId));
+      }
+    } catch (e: any) {
+      setGalatKirim(e?.message ?? 'Koneksi bermasalah.');
+    } finally {
+      sedangKirim.current = false;
+      setMengirim(false);
+    }
+    if (adaBerhasil) await onProfilBerubah();
+  }, [setRiwayat, onProfilBerubah]);
+
+  // Saat sesi selesai, catat ke riwayat (tidak akan ganda karena dicek lewat sesiId)
+  useEffect(() => {
+    if (!selesai || !sesiAktif || !riwayatSiap) return;
+    setRiwayat((r) =>
+      tambahCatatan(r, {
+        sesiId: sesiAktif.sesiId,
+        waktu: new Date().toISOString(),
+        hasil: sesiAktif.hasil.map(ringkasHasil),
+        tersinkron: false,
+      }),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selesai, sesiAktif?.sesiId, riwayatSiap]);
+
+  // Kirim otomatis kalau ada hasil yang belum tersimpan
+  useEffect(() => {
+    if (riwayatSiap && jumlahTertunda > 0) kirimTertunda();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [riwayatSiap, jumlahTertunda]);
+
   function mulai() {
     if (!siap) return;
     const ids = buatSesi();
     setSesi({
+      sesiId: buatIdSesi(),
       idSoal: ids,
       indeks: 0,
       hasil: [],
@@ -105,6 +194,30 @@ export default function TebakScreen() {
     setSesi({ ...sesiAktif, indeks: indeksBaru, draft: buatDraft(soalBaru), diperiksa: false });
   }
 
+  const ringkas = ringkasRiwayat(riwayat);
+
+  function renderRiwayat(judul: string) {
+    if (ringkas.sesi === 0) return null;
+    return (
+      <View style={styles.kartu}>
+        <Text style={styles.judul}>{judul}</Text>
+        <Text style={styles.isiTeks}>
+          {ringkas.sesi} sesi · akurasi {ringkas.akurasi}% ({ringkas.benar}/{ringkas.total} soal benar)
+        </Text>
+        {ringkas.miskonsepsi.length > 0 && (
+          <>
+            <Text style={styles.petunjuk}>Miskonsepsi yang paling sering muncul:</Text>
+            {ringkas.miskonsepsi.slice(0, 3).map((m) => (
+              <Text key={m.jenis} style={styles.butir}>
+                • {namaMiskonsepsi(m.jenis)} ({m.jumlah}x)
+              </Text>
+            ))}
+          </>
+        )}
+      </View>
+    );
+  }
+
   // ===== 1. Belum mulai =====
   if (!sesiAktif) {
     return (
@@ -123,9 +236,25 @@ export default function TebakScreen() {
             <Text style={styles.judul}>Isi tantangan</Text>
             <Text style={styles.butir}>• 5 soal: 3 simulasi urutan keluar dan 2 pilihan ganda</Text>
             <Text style={styles.butir}>• Tingkat naik bertahap: mudah, sedang, menantang</Text>
-            <Text style={styles.butir}>• Kunci jawaban dihitung dari logika Stack dan Queue asli</Text>
-            <Text style={styles.butir}>• Kesalahanmu dipetakan ke jenis miskonsepsi</Text>
+            <Text style={styles.butir}>• Tiap jawaban benar +10 XP, semua benar bonus +20 XP</Text>
+            <Text style={styles.butir}>• Poin hingga +20, sesuai jumlah jawaban benar</Text>
           </View>
+
+          {renderRiwayat('Riwayat belajarmu')}
+
+          {jumlahTertunda > 0 && (
+            <View style={styles.peringatan}>
+              <Text style={styles.peringatanIsi}>
+                {jumlahTertunda} hasil sesi belum tersimpan ke akunmu.
+                {mengirim ? ' Sedang dikirim...' : ''}
+              </Text>
+              {!mengirim && (
+                <TouchableOpacity style={styles.tombolKecil} onPress={kirimTertunda}>
+                  <Text style={styles.tombolKecilTeks}>Kirim sekarang</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
 
           <TouchableOpacity
             style={[styles.tombolHijau, !siap && styles.mati]}
@@ -144,8 +273,10 @@ export default function TebakScreen() {
   // ===== 2. Hasil akhir =====
   if (sesiAktif.indeks >= total) {
     const hasil = sesiAktif.hasil;
-    const jumlahBenar = hasil.filter((h) => h.benar).length;
-    const akurasi = Math.round((jumlahBenar / total) * 100);
+    const jumlahBenarSesi = hasil.filter((h) => h.benar).length;
+    const akurasi = Math.round((jumlahBenarSesi / total) * 100);
+    const hadiah = hitungHadiah(jumlahBenarSesi, total);
+    const catatan = riwayat.find((c) => c.sesiId === sesiAktif.sesiId);
     const jenisMiskonsepsi = Array.from(
       new Set(hasil.map((h) => h.miskonsepsi).filter((m): m is Miskonsepsi => m !== null)),
     );
@@ -162,9 +293,39 @@ export default function TebakScreen() {
           <View style={styles.banner}>
             <Text style={styles.bannerTag}>HASIL TANTANGAN</Text>
             <Text style={styles.bannerJudul}>
-              {jumlahBenar} dari {total} benar ({akurasi}%)
+              {jumlahBenarSesi} dari {total} benar ({akurasi}%)
             </Text>
             <Text style={styles.bannerSub}>{pesan}</Text>
+          </View>
+
+          <View style={styles.kartu}>
+            <Text style={styles.judul}>Hadiah sesi ini</Text>
+            <View style={styles.hadiahBaris}>
+              <View style={styles.hadiahKotak}>
+                <Text style={styles.hadiahAngka}>⚡ +{hadiah.xp}</Text>
+                <Text style={styles.hadiahLabel}>XP</Text>
+              </View>
+              <View style={styles.hadiahKotak}>
+                <Text style={styles.hadiahAngka}>⭐ +{hadiah.poin}</Text>
+                <Text style={styles.hadiahLabel}>Poin</Text>
+              </View>
+            </View>
+
+            {catatan?.tersinkron ? (
+              <Text style={styles.statusOk}>✅ Sudah tersimpan ke akunmu.</Text>
+            ) : mengirim ? (
+              <Text style={styles.petunjuk}>Menyimpan ke akunmu...</Text>
+            ) : (
+              <>
+                <Text style={styles.statusGalat}>
+                  ⚠️ Belum tersimpan{galatKirim ? ` (${galatKirim})` : ''}. Hasilmu aman di HP dan
+                  akan dikirim ulang.
+                </Text>
+                <TouchableOpacity style={styles.tombolKecil} onPress={kirimTertunda}>
+                  <Text style={styles.tombolKecilTeks}>Coba simpan lagi</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           <View style={styles.kartu}>
@@ -187,10 +348,10 @@ export default function TebakScreen() {
           </View>
 
           <View style={styles.kartu}>
-            <Text style={styles.judul}>Diagnosis miskonsepsi</Text>
+            <Text style={styles.judul}>Diagnosis sesi ini</Text>
             {jenisMiskonsepsi.length === 0 ? (
               <Text style={styles.isiTeks}>
-                {jumlahBenar === total
+                {jumlahBenarSesi === total
                   ? 'Tidak ada miskonsepsi terdeteksi. Mantap!'
                   : 'Tidak ada pola miskonsepsi khusus yang terdeteksi. Coba telusuri langkah demi langkah dengan tabel jejak.'}
               </Text>
@@ -208,6 +369,8 @@ export default function TebakScreen() {
               })
             )}
           </View>
+
+          {renderRiwayat('Riwayat semua sesi')}
 
           <TouchableOpacity style={styles.tombolHijau} onPress={mulai}>
             <Text style={styles.tombolHijauTeks}>Main Lagi (soal baru)</Text>
@@ -338,20 +501,20 @@ export default function TebakScreen() {
   function renderUmpanBalik(s: Soal, h: HasilSoal) {
     const info = h.miskonsepsi ? INFO_MISKONSEPSI[h.miskonsepsi] : null;
 
-    let ringkas = '';
+    let ringkasTeks = '';
     let langkah: ReturnType<typeof hitungKunci>['langkah'] = [];
     let akhir = '';
     if (s.jenis === 'simulasi') {
       const kunci = hitungKunci(s);
       langkah = kunci.langkah;
-      ringkas = `Urutan keluar yang benar: ${kunci.keluar.map((x) => namaItem(s, x)).join(' → ')}`;
+      ringkasTeks = `Urutan keluar yang benar: ${kunci.keluar.map((x) => namaItem(s, x)).join(' → ')}`;
       akhir =
         s.struktur === 'stack'
           ? `Isi akhir: [${kunci.isiAkhir.join(', ')}], TOP = ${kunci.top ?? 'kosong'}`
           : `Isi akhir: [${kunci.isiAkhir.join(', ')}], FRONT = ${kunci.front ?? 'kosong'}, REAR = ${kunci.rear ?? 'kosong'}`;
     } else {
       const benarTeks = s.pilihan.find((p) => p.id === s.benar)?.teks ?? '';
-      ringkas = `Jawaban yang benar: ${benarTeks}`;
+      ringkasTeks = `Jawaban yang benar: ${benarTeks}`;
     }
 
     return (
@@ -360,7 +523,7 @@ export default function TebakScreen() {
           <Text style={[styles.hasilJudul, { color: h.benar ? warna.hijauTeks : '#B91C1C' }]}>
             {h.benar ? 'Benar sekali! 🎉' : 'Belum tepat 🤔'}
           </Text>
-          <Text style={styles.hasilIsi}>{ringkas}</Text>
+          <Text style={styles.hasilIsi}>{ringkasTeks}</Text>
         </View>
 
         <View style={styles.kartu}>
@@ -435,7 +598,11 @@ export default function TebakScreen() {
         {hasilIni && renderUmpanBalik(soal, hasilIni)}
 
         {hasilIni && (
-          <TouchableOpacity style={styles.tombolHijau} onPress={berikutnya}>
+          <TouchableOpacity
+            style={[styles.tombolHijau, terakhir && !riwayatSiap && styles.mati]}
+            onPress={berikutnya}
+            disabled={terakhir && !riwayatSiap}
+          >
             <Text style={styles.tombolHijauTeks}>
               {terakhir ? 'Lihat Hasil' : `Soal Berikutnya (${sesiAktif.indeks + 2}/${total})`}
             </Text>
@@ -508,7 +675,19 @@ const styles = StyleSheet.create({
 
   tombolHijau: { backgroundColor: warna.hijau, borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginBottom: 14 },
   tombolHijauTeks: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  tombolKecil: {
+    alignSelf: 'flex-start', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1,
+    borderColor: warna.garis, paddingHorizontal: 14, paddingVertical: 9, marginTop: 8,
+  },
+  tombolKecilTeks: { fontWeight: '700', color: warna.teks, fontSize: 13 },
   mati: { opacity: 0.4 },
+
+  hadiahBaris: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  hadiahKotak: { flex: 1, backgroundColor: warna.latar, borderRadius: 14, padding: 14, alignItems: 'center' },
+  hadiahAngka: { fontSize: 22, fontWeight: '800', color: warna.teks },
+  hadiahLabel: { color: warna.teksRedup, marginTop: 2 },
+  statusOk: { color: warna.hijauTeks, fontWeight: '700' },
+  statusGalat: { color: '#B91C1C', lineHeight: 20 },
 
   hasilBanner: { borderRadius: 16, padding: 16, marginBottom: 14 },
   hasilBenar: { backgroundColor: '#ECFDF5' },

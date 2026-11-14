@@ -1,7 +1,14 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  type Dispatch,
+  type ReactNode,
+  type SetStateAction,
+} from 'react';
 import { useSimulator } from '../hooks/useSimulator';
 import { useTersimpan } from '../hooks/useTersimpan';
 import type { Miskonsepsi } from '../data/miskonsepsi';
+import type { CatatanSesi } from '../logic/hadiah';
 
 export const KAPASITAS = 5;
 
@@ -18,6 +25,7 @@ export type HasilSoal = {
 };
 
 export type SesiTebak = {
+  sesiId: string;              // dipakai server agar sesi tidak dihitung dua kali
   idSoal: string[];            // soal dalam sesi ini, berurutan
   indeks: number;              // soal yang sedang dikerjakan (0-based)
   hasil: HasilSoal[];          // jawaban yang sudah diperiksa
@@ -38,6 +46,11 @@ type Nilai = {
     setNilai: (n: SesiTebak | null) => void;
     siap: boolean;
   };
+  riwayatTebak: {
+    nilai: CatatanSesi[];
+    setNilai: Dispatch<SetStateAction<CatatanSesi[]>>;
+    siap: boolean;
+  };
 };
 
 const Konteks = createContext<Nilai | null>(null);
@@ -50,9 +63,10 @@ export function SimulatorProvider({ userId, children }: { userId: string; childr
     AWAL_BANDINGKAN,
   );
   const tebak = useTersimpan<SesiTebak | null>(`@codekantin/sim/${userId}/tebak`, null);
+  const riwayatTebak = useTersimpan<CatatanSesi[]>(`@codekantin/attempts/${userId}`, []);
 
   return (
-    <Konteks.Provider value={{ antrean, tumpukan, bandingkan, tebak }}>
+    <Konteks.Provider value={{ antrean, tumpukan, bandingkan, tebak, riwayatTebak }}>
       {children}
     </Konteks.Provider>
   );
@@ -68,3 +82,4 @@ export const useAntrean = () => useKonteks().antrean;
 export const useTumpukan = () => useKonteks().tumpukan;
 export const useBandingkan = () => useKonteks().bandingkan;
 export const useTebak = () => useKonteks().tebak;
+export const useRiwayatTebak = () => useKonteks().riwayatTebak;

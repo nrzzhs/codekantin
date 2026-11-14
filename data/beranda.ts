@@ -1,4 +1,5 @@
 import { KAPASITAS } from '../context/SimulatorContext';
+import { POIN_MAKS } from '../logic/hadiah';
 
 // ===== Modul =====
 export type RuteModul = 'Antrean' | 'Tumpukan' | 'Tebak';
@@ -47,15 +48,14 @@ export const DAFTAR_MODUL: Modul[] = [
   },
 ];
 
-// ===== Pengaturan Mode Tebak =====
-export const POIN_PER_TANTANGAN = 20;
-export const INSTRUKSI_TEBAK = ['push', 'enqueue', 'pop'];
+// ===== Ringkasan kartu modul (dari isi simulator dan sesi Tebak yang asli) =====
+export type InfoTebak = { indeks: number; total: number } | null;
 
-// ===== Ringkasan kartu modul (dari isi simulator yang asli) =====
 export function ringkasanModul(
   id: RuteModul,
   isiAntrean: string[],
   isiTumpukan: string[],
+  infoTebak: InfoTebak,
 ): { kiri: string; kanan: string } {
   if (id === 'Antrean') {
     const depan = isiAntrean[0];
@@ -71,10 +71,10 @@ export function ringkasanModul(
       kanan: `Tinggi: ${isiTumpukan.length}/${KAPASITAS}`,
     };
   }
-  return {
-    kiri: `Instruksi: ${INSTRUKSI_TEBAK.join(', ')}`,
-    kanan: `Skor +${POIN_PER_TANTANGAN} Poin`,
-  };
+  const kanan = `Hingga +${POIN_MAKS} Poin`;
+  if (!infoTebak) return { kiri: 'Belum ada sesi • 5 soal', kanan };
+  if (infoTebak.indeks >= infoTebak.total) return { kiri: 'Sesi selesai • main lagi?', kanan };
+  return { kiri: `Sesi: soal ${infoTebak.indeks + 1} dari ${infoTebak.total}`, kanan };
 }
 
 // ===== Lencana (dihitung dari XP) =====

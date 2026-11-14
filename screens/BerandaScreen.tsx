@@ -7,7 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import KartuModul from '../components/KartuModul';
 import { warna } from '../lib/tema';
 import { DAFTAR_MODUL, FAKTA, hitungLencana, ringkasanModul } from '../data/beranda';
-import { useAntrean, useTumpukan } from '../context/SimulatorContext';
+import { useAntrean, useTumpukan, useTebak } from '../context/SimulatorContext';
 
 type Props = {
   nickname: string;
@@ -29,6 +29,11 @@ export default function BerandaScreen({ nickname, avatarUrl, points, xp, onRefre
   const navigation = useNavigation<any>();
   const isiAntrean = useAntrean().tampil.isi;
   const isiTumpukan = useTumpukan().tampil.isi;
+  const sesiTebak = useTebak().nilai;
+  const infoTebak =
+    sesiTebak && Array.isArray(sesiTebak.idSoal) && sesiTebak.idSoal.length > 0
+      ? { indeks: Math.min(sesiTebak.indeks, sesiTebak.idSoal.length), total: sesiTebak.idSoal.length }
+      : null;
 
   const [refreshing, setRefreshing] = useState(false);
   const [indeksFakta, setIndeksFakta] = useState(() => faktaAcak());
@@ -93,7 +98,7 @@ export default function BerandaScreen({ nickname, avatarUrl, points, xp, onRefre
         <Text style={styles.bagianSub}>Pilih konsep untuk mulai simulasi interaktif</Text>
 
         {DAFTAR_MODUL.map((m) => {
-          const r = ringkasanModul(m.id, isiAntrean, isiTumpukan);
+          const r = ringkasanModul(m.id, isiAntrean, isiTumpukan, infoTebak);
           return (
             <KartuModul
               key={m.id}

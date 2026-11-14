@@ -69,9 +69,10 @@ function Tabs({ userId, email, profile, muatProfil }: TabsProps) {
       />
       <Tab.Screen
         name="Tebak"
-        component={TebakScreen}
         options={{ tabBarIcon: ({ focused }) => <Ikon emoji="🎯" fokus={focused} /> }}
-      />
+      >
+        {() => <TebakScreen onProfilBerubah={muatProfil} />}
+      </Tab.Screen>
       <Tab.Screen
         name="Profil"
         options={{ tabBarIcon: ({ focused }) => <Ikon emoji="👤" fokus={focused} /> }}

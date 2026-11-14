@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTumpukan, KAPASITAS } from '../context/SimulatorContext';
 import PanelPseudocode from '../components/PanelPseudocode';
+import ItemAnimasi from '../components/ItemAnimasi';
 import { warna, fontKode } from '../lib/tema';
 
 const JENIS = ['Keramik', 'Kaca', 'Melamin', 'Porselen', 'Kayu'];
@@ -49,14 +50,18 @@ export default function TumpukanScreen() {
               const atas = i === 0;
               const dasar = i === dariAtas.length - 1;
               return (
-                <View key={`${nama}-${i}`} style={[styles.piring, atas && styles.piringAtas]}>
+                <ItemAnimasi
+                  key={nama}
+                  gaya="tumpukan"
+                  style={[styles.piring, atas && styles.piringAtas]}
+                >
                   <Text style={styles.emoji}>🍽️</Text>
                   <Text style={styles.piringNama} numberOfLines={1}>{nama}</Text>
                   <View style={styles.penanda}>
                     {atas && <Text style={styles.tagAtas}>TOP</Text>}
                     {dasar && <Text style={styles.tagDasar}>DASAR</Text>}
                   </View>
-                </View>
+                </ItemAnimasi>
               );
             })}
           </View>

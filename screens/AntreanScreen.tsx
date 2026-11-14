@@ -2,6 +2,7 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-nati
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAntrean, KAPASITAS } from '../context/SimulatorContext';
 import PanelPseudocode from '../components/PanelPseudocode';
+import ItemAnimasi from '../components/ItemAnimasi';
 import { warna, fontKode } from '../lib/tema';
 
 const NAMA = ['Andi', 'Budi', 'Citra', 'Dina', 'Eka', 'Fajar', 'Gita', 'Hana'];
@@ -46,14 +47,18 @@ export default function AntreanScreen() {
               const depan = i === 0;
               const belakang = i === isi.length - 1;
               return (
-                <View key={`${nama}-${i}`} style={[styles.chip, depan && styles.chipDepan]}>
+                <ItemAnimasi
+                  key={nama}
+                  gaya="antrean"
+                  style={[styles.chip, depan && styles.chipDepan]}
+                >
                   <Text style={styles.emoji}>🧑</Text>
                   <Text style={styles.chipNama} numberOfLines={1}>{nama}</Text>
                   <View style={styles.penanda}>
                     {depan && <Text style={styles.tagDepan}>FRONT</Text>}
                     {belakang && <Text style={styles.tagBelakang}>REAR</Text>}
                   </View>
-                </View>
+                </ItemAnimasi>
               );
             })}
             {Array.from({ length: slotKosong }).map((_, i) => (

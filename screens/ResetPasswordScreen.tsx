@@ -1,6 +1,23 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Alert,
+} from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { font, warna } from '../lib/tema';
+import Kartu from '../components/ui/Kartu';
+import KolomIsian from '../components/ui/KolomIsian';
+import Tombol from '../components/ui/Tombol';
+import Gembok from '../components/ilustrasi/Gembok';
 
 type Props = { onDone: () => void };
 
@@ -8,9 +25,11 @@ export default function ResetPasswordScreen({ onDone }: Props) {
   const [email, setEmail] = useState('');
   const [kode, setKode] = useState('');
   const [passwordBaru, setPasswordBaru] = useState('');
+  const [ulangPassword, setUlangPassword] = useState('');
   const [kodeTerkirim, setKodeTerkirim] = useState(false);
   const [terverifikasi, setTerverifikasi] = useState(false);
   const [loading, setLoading] = useState(false);
+  const insets = useSafeAreaInsets();
 
   async function kirimKode() {
     if (!email.trim()) {
@@ -63,63 +82,166 @@ export default function ResetPasswordScreen({ onDone }: Props) {
     onDone();
   }
 
+  // Syarat tampilan: tombol simpan baru menyala kalau keduanya terpenuhi
+  const syarat = [
+    { teks: 'Minimal 6 karakter', ok: passwordBaru.length >= 6 },
+    { teks: 'Kedua password sama', ok: ulangPassword.length > 0 && ulangPassword === passwordBaru },
+  ];
+  const syaratLengkap = syarat.every((s) => s.ok);
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Lupa password 🔑</Text>
-      <Text style={styles.subtitle}>
-        {kodeTerkirim ? 'Masukkan kode dari email dan password baru.' : 'Masukkan email akunmu.'}
-      </Text>
+    <View style={[styles.layar, { paddingTop: insets.top }]}>
+      <StatusBar style="dark" />
+      <KeyboardAvoidingView
+        style={styles.layar}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.isi} keyboardShouldPersistTaps="handled">
+          <View style={styles.tengah}>
+            <View style={styles.lingkaran}>
+              <Gembok ukuran={100} />
+            </View>
+            <Text style={styles.judul} accessibilityRole="header">
+              {kodeTerkirim ? 'Buat password baru' : 'Lupa password?'}
+            </Text>
+            <Text style={styles.deskripsi}>
+              {kodeTerkirim
+                ? 'Pakai password yang mudah kamu ingat tapi susah ditebak orang lain.'
+                : 'Masukkan email akunmu. Kami kirim kode untuk membuat password baru.'}
+            </Text>
+          </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-        editable={!kodeTerkirim}
-      />
-
-      {!kodeTerkirim ? (
-        <TouchableOpacity style={styles.button} onPress={kirimKode} disabled={loading}>
-          <Text style={styles.buttonText}>{loading ? 'Mengirim...' : 'Kirim kode'}</Text>
-        </TouchableOpacity>
-      ) : (
-        <>
-          <TextInput
-            style={styles.input}
-            placeholder="Kode dari email"
-            keyboardType="number-pad"
-            maxLength={10}
-            value={kode}
-            onChangeText={setKode}
+          <KolomIsian
+            label="Email"
+            ikon="mail-outline"
+            placeholder="nama@email.com"
+            autoCapitalize="none"
+            autoComplete="email"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+            value={email}
+            onChangeText={setEmail}
+            editable={!kodeTerkirim}
           />
-          <TextInput
-            style={styles.input}
-            placeholder="Password baru (min. 6 karakter)"
-            secureTextEntry
-            value={passwordBaru}
-            onChangeText={setPasswordBaru}
-          />
-          <TouchableOpacity style={styles.button} onPress={simpanPasswordBaru} disabled={loading}>
-            <Text style={styles.buttonText}>{loading ? 'Menyimpan...' : 'Simpan password baru'}</Text>
-          </TouchableOpacity>
-        </>
-      )}
 
-      <TouchableOpacity onPress={onDone}>
-        <Text style={styles.link}>Kembali</Text>
-      </TouchableOpacity>
+          {kodeTerkirim && (
+            <>
+              <KolomIsian
+                label="Kode dari email"
+                ikon="keypad-outline"
+                placeholder="Kode dari email"
+                keyboardType="number-pad"
+                autoComplete="one-time-code"
+                textContentType="oneTimeCode"
+                maxLength={10}
+                value={kode}
+                onChangeText={setKode}
+              />
+              <KolomIsian
+                label="Password baru"
+                ikon="lock-closed-outline"
+                placeholder="Password baru"
+                rahasia
+                autoCapitalize="none"
+                autoComplete="new-password"
+                textContentType="newPassword"
+                value={passwordBaru}
+                onChangeText={setPasswordBaru}
+              />
+              <KolomIsian
+                label="Ulangi password"
+                ikon="lock-closed-outline"
+                placeholder="Ketik ulang password baru"
+                rahasia
+                autoCapitalize="none"
+                autoComplete="new-password"
+                textContentType="newPassword"
+                value={ulangPassword}
+                onChangeText={setUlangPassword}
+              />
+
+              <Kartu style={styles.syarat} accessibilityLiveRegion="polite">
+                {syarat.map((s) => (
+                  <View
+                    key={s.teks}
+                    style={styles.barisSyarat}
+                    accessible
+                    accessibilityLabel={`${s.teks}: ${s.ok ? 'terpenuhi' : 'belum terpenuhi'}`}
+                  >
+                    <View style={[styles.bulatSyarat, s.ok && styles.bulatSyaratOk]}>
+                      {s.ok && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                    </View>
+                    <Text style={[styles.teksSyarat, s.ok && styles.teksSyaratOk]}>{s.teks}</Text>
+                  </View>
+                ))}
+              </Kartu>
+            </>
+          )}
+        </ScrollView>
+
+        <View style={[styles.kaki, { paddingBottom: insets.bottom + 8 }]}>
+          {kodeTerkirim ? (
+            <Tombol
+              label="Simpan Password"
+              onPress={simpanPasswordBaru}
+              nonaktif={!syaratLengkap}
+              memuat={loading}
+            />
+          ) : (
+            <Tombol label="Kirim Kode" ikon="mail-outline" onPress={kirimKode} memuat={loading} />
+          )}
+          <Pressable
+            onPress={onDone}
+            style={styles.kembali}
+            accessibilityRole="button"
+            accessibilityLabel="Kembali ke halaman masuk"
+          >
+            <Text style={styles.kembaliTeks}>Kembali</Text>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFF8E7', justifyContent: 'center', padding: 24 },
-  title: { fontSize: 28, fontWeight: 'bold', textAlign: 'center' },
-  subtitle: { fontSize: 16, color: '#555', textAlign: 'center', marginBottom: 24 },
-  input: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#ddd' },
-  button: { backgroundColor: '#2563EB', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 4 },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  link: { textAlign: 'center', color: '#2563EB', marginTop: 16 },
+  layar: { flex: 1, backgroundColor: warna.latar },
+  isi: { padding: 20, gap: 20, flexGrow: 1 },
+
+  tengah: { alignItems: 'center', gap: 8 },
+  lingkaran: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: warna.persik,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  judul: { fontFamily: font.judul, fontSize: 26, color: warna.teks, textAlign: 'center' },
+  deskripsi: {
+    fontFamily: font.isi,
+    fontSize: 15,
+    lineHeight: 22,
+    color: warna.teksRedup,
+    textAlign: 'center',
+  },
+
+  syarat: { gap: 12 },
+  barisSyarat: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  bulatSyarat: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: warna.garis,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bulatSyaratOk: { backgroundColor: warna.hijau },
+  teksSyarat: { fontFamily: font.semi, fontSize: 14, color: warna.teksRedup },
+  teksSyaratOk: { color: warna.hijauTeks },
+
+  kaki: { paddingHorizontal: 20, paddingTop: 8, gap: 4, backgroundColor: warna.latar },
+  kembali: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  kembaliTeks: { fontFamily: font.tebal, fontSize: 14, color: warna.biru },
 });

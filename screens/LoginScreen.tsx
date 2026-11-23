@@ -1,6 +1,24 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  Image,
+  Pressable,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
+  Alert,
+  useWindowDimensions,
+} from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabase';
+import { font, radius, warna } from '../lib/tema';
+import Kartu from '../components/ui/Kartu';
+import KolomIsian from '../components/ui/KolomIsian';
+import Tombol from '../components/ui/Tombol';
+import IlustrasiLogin from '../components/ilustrasi/IlustrasiLogin';
 
 type Props = { onForgot: () => void };
 export default function LoginScreen({ onForgot }: Props) {
@@ -8,6 +26,8 @@ export default function LoginScreen({ onForgot }: Props) {
   const [password, setPassword] = useState('');
   const [isDaftar, setIsDaftar] = useState(false);
   const [loading, setLoading] = useState(false);
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
 
   async function handleSubmit() {
     if (!email || !password) {
@@ -40,54 +60,177 @@ export default function LoginScreen({ onForgot }: Props) {
     }
   }
 
+  const labelTombol = loading
+    ? isDaftar
+      ? 'Mendaftar…'
+      : 'Masuk…'
+    : isDaftar
+      ? 'Daftar Akun'
+      : 'Masuk';
+
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>CodeKantin 🍽️</Text>
-      <Text style={styles.subtitle}>{isDaftar ? 'Buat akun baru' : 'Masuk ke akunmu'}</Text>
+    <View style={styles.layar}>
+      <StatusBar style="dark" />
+      <KeyboardAvoidingView
+        style={styles.layar}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.gulir}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+        >
+          <View style={[styles.header, { paddingTop: insets.top + 16 }]}>
+            <View style={styles.merek}>
+              <Image
+                source={require('../assets/icon.png')}
+                style={styles.ikonApp}
+                accessibilityIgnoresInvertColors
+              />
+              <Text style={styles.namaApp} accessibilityRole="header">
+                Code<Text style={styles.namaAppAksen}>Kantin</Text>
+              </Text>
+            </View>
+            <Text style={styles.tagline}>Belajar Stack & Queue di dapur restoran</Text>
+            <View style={styles.ilustrasi}>
+              <IlustrasiLogin lebar={width} />
+            </View>
+          </View>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        autoCapitalize="none"
-        keyboardType="email-address"
-        value={email}
-        onChangeText={setEmail}
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Password (min. 6 karakter)"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
+          <Kartu style={styles.kartu}>
+            <View style={styles.pilihan} accessibilityRole="tablist">
+              {[
+                { daftar: false, label: 'Masuk' },
+                { daftar: true, label: 'Daftar' },
+              ].map((m) => {
+                const dipilih = isDaftar === m.daftar;
+                return (
+                  <Pressable
+                    key={m.label}
+                    onPress={() => setIsDaftar(m.daftar)}
+                    disabled={loading}
+                    style={[styles.pilihanTombol, dipilih && styles.pilihanAktif]}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: dipilih, disabled: loading }}
+                  >
+                    <Text style={[styles.pilihanTeks, dipilih && styles.pilihanTeksAktif]}>
+                      {m.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
-      <TouchableOpacity style={styles.button} onPress={handleSubmit} disabled={loading}>
-        <Text style={styles.buttonText}>
-          {loading ? 'Memproses...' : isDaftar ? 'Daftar' : 'Masuk'}
-        </Text>
-      </TouchableOpacity>
+            <Text style={styles.judul} accessibilityRole="header">
+              {isDaftar ? 'Buat akun koki barumu' : 'Selamat datang kembali, Koki!'}
+            </Text>
 
-      {!isDaftar && (
-        <TouchableOpacity onPress={onForgot}>
-          <Text style={styles.link}>Lupa password?</Text>
-        </TouchableOpacity>
-      )}
+            <KolomIsian
+              label="Email"
+              ikon="mail-outline"
+              placeholder="nama@email.com"
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              value={email}
+              onChangeText={setEmail}
+            />
+            <KolomIsian
+              label="Password"
+              ikon="lock-closed-outline"
+              placeholder="Password"
+              rahasia
+              autoCapitalize="none"
+              autoComplete={isDaftar ? 'new-password' : 'current-password'}
+              textContentType={isDaftar ? 'newPassword' : 'password'}
+              value={password}
+              onChangeText={setPassword}
+            />
 
-      <TouchableOpacity onPress={() => setIsDaftar(!isDaftar)}>
-        <Text style={styles.link}>
-          {isDaftar ? 'Sudah punya akun? Masuk' : 'Belum punya akun? Daftar'}
-        </Text>
-      </TouchableOpacity>
+            {isDaftar ? (
+              <Text style={styles.bantuan}>Minimal 6 karakter.</Text>
+            ) : (
+              <Pressable
+                onPress={onForgot}
+                style={styles.lupa}
+                accessibilityRole="button"
+                hitSlop={4}
+              >
+                <Text style={styles.lupaTeks}>Lupa password?</Text>
+              </Pressable>
+            )}
+
+            <Tombol label={labelTombol} onPress={handleSubmit} memuat={loading} />
+          </Kartu>
+
+          <View style={styles.pengisi} />
+          <Text style={[styles.kaki, { paddingBottom: insets.bottom + 16 }]}>
+            IK300 Mobile Programming · Pendidikan Ilmu Komputer UPI
+          </Text>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#FFF8E7', justifyContent: 'center', padding: 24 },
-  title: { fontSize: 32, fontWeight: 'bold', textAlign: 'center' },
-  subtitle: { fontSize: 16, color: '#555', textAlign: 'center', marginBottom: 24 },
-  input: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#ddd' },
-  button: { backgroundColor: '#2563EB', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 4 },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
-  link: { textAlign: 'center', color: '#2563EB', marginTop: 16 },
+  layar: { flex: 1, backgroundColor: warna.latar },
+  gulir: { flexGrow: 1 },
+
+  header: {
+    backgroundColor: warna.persik,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    overflow: 'hidden',
+    alignItems: 'center',
+  },
+  merek: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  ikonApp: { width: 44, height: 44, borderRadius: 10 },
+  namaApp: { fontFamily: font.judul, fontSize: 26, letterSpacing: -0.8, color: warna.gelap },
+  // #C2410C di #FDE4D6 = 4,25:1 — lolos untuk teks besar & tebal (minimal 3:1)
+  namaAppAksen: { color: warna.oranye },
+  tagline: { fontFamily: font.semi, fontSize: 14, color: warna.persikTeks, marginTop: 6 },
+  ilustrasi: { marginTop: 12 },
+
+  kartu: { marginHorizontal: 20, marginTop: -20, padding: 22, gap: 16 },
+
+  pilihan: {
+    flexDirection: 'row',
+    backgroundColor: warna.kotakKode,
+    borderRadius: radius.tombol,
+    padding: 4,
+  },
+  pilihanTombol: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pilihanAktif: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#1F1A17',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  pilihanTeks: { fontFamily: font.tebal, fontSize: 14, color: warna.teksRedup },
+  pilihanTeksAktif: { color: warna.teks },
+
+  judul: { fontFamily: font.judul, fontSize: 20, color: warna.teks },
+
+  bantuan: { fontFamily: font.isi, fontSize: 13, color: warna.teksRedup, marginTop: -8 },
+  lupa: { alignSelf: 'flex-end', minHeight: 44, justifyContent: 'center', marginVertical: -8 },
+  lupaTeks: { fontFamily: font.tebal, fontSize: 14, color: warna.biru },
+
+  pengisi: { flex: 1, minHeight: 24 },
+  kaki: {
+    fontFamily: font.isi,
+    fontSize: 12,
+    color: warna.teksRedup,
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
 });

@@ -26,6 +26,13 @@ const PASANGAN: [string, string, string][] = [
   ['teks slot kosong di putih', '#64748B', PUTIH],
   ['teks pseudocode redup di panel gelap', '#94A3B8', warna.gelap],
   ['teks pseudocode menyala di panel gelap', '#E2E8F0', warna.gelap],
+  // Tampilan tahap 1–2
+  ['tagline & huruf avatar di header persik', warna.persikTeks, warna.persik],
+  ['teks redup di pilihan Masuk/Daftar & keadaan kosong', warna.teksRedup, warna.kotakKode],
+  ['tab aktif & pil Koki Magang di hijau muda', warna.hijauTua, warna.hijauMuda],
+  ['teks tombol nonaktif', warna.teksRedup, warna.garis],
+  ['putih di tombol utama hijau', PUTIH, warna.hijau],
+  ['teks syarat terpenuhi di kartu putih', warna.hijauTeks, PUTIH],
 ];
 
 describe('Kontras warna (WCAG AA, teks normal minimal 4,5:1)', () => {

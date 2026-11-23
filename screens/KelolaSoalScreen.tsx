@@ -17,6 +17,7 @@ import { hitungRingkasan, ringkasSoal, saring } from '../logic/formSoal';
 import type { BarisKelola, FilterSoal } from '../logic/formSoal';
 import { useBankSoal } from '../context/BankSoalContext';
 import { SpinnerPiring } from '../components/Loading';
+import KeadaanKosong from '../components/ui/KeadaanKosong';
 
 type Props = { userId: string };
 
@@ -164,12 +165,16 @@ export default function KelolaSoalScreen({ userId }: Props) {
           </View>
         )}
 
-        {daftar !== null && tampil.length === 0 && !galat && (
-          <Text style={styles.kosong}>
-            {ringkas.total === 0
-              ? 'Belum ada soal. Ketuk "Soal baru" untuk membuat soal pertamamu.'
-              : 'Tidak ada soal untuk filter ini.'}
-          </Text>
+        {daftar !== null && tampil.length === 0 && !galat && ringkas.total === 0 && (
+          <KeadaanKosong
+            judul="Piringnya masih kosong"
+            deskripsi="Belum ada soal. Tambahkan soal pertama untuk siswa."
+            aksi={{ label: '+ Tambah soal', onPress: () => navigation.navigate('FormSoal') }}
+          />
+        )}
+
+        {daftar !== null && tampil.length === 0 && !galat && ringkas.total > 0 && (
+          <Text style={styles.kosong}>Tidak ada soal untuk filter ini.</Text>
         )}
 
         {tampil.map((b) => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { Text } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -11,6 +11,7 @@ import type { Profile } from './lib/types';
 import { warna } from './lib/tema';
 import { SimulatorProvider } from './context/SimulatorContext';
 import { BankSoalProvider } from './context/BankSoalContext';
+import { LayarSplash } from './components/Loading';
 import LoginScreen from './screens/LoginScreen';
 import NicknameScreen from './screens/NicknameScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
@@ -135,13 +136,7 @@ export default function App() {
     return () => listener.subscription.unsubscribe();
   }, [muatProfil]);
 
-  if (checking) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
+  if (checking) return <LayarSplash />;
 
   // Harus sebelum cek session, karena verifikasi kode membuat sesi login otomatis
   if (showReset) {
@@ -207,7 +202,3 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  center: { flex: 1, backgroundColor: warna.latar, alignItems: 'center', justifyContent: 'center' },
-});

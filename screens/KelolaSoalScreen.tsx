@@ -7,7 +7,6 @@ import {
   RefreshControl,
   Switch,
   Alert,
-  ActivityIndicator,
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,6 +16,7 @@ import { ambilSoalSaya, hapusSoal, setAktif } from '../lib/bankSoal';
 import { hitungRingkasan, ringkasSoal, saring } from '../logic/formSoal';
 import type { BarisKelola, FilterSoal } from '../logic/formSoal';
 import { useBankSoal } from '../context/BankSoalContext';
+import { SpinnerPiring } from '../components/Loading';
 
 type Props = { userId: string };
 
@@ -153,7 +153,7 @@ export default function KelolaSoalScreen({ userId }: Props) {
           ))}
         </View>
 
-        {daftar === null && memuat && <ActivityIndicator size="large" style={{ marginTop: 24 }} />}
+        {daftar === null && memuat && <SpinnerPiring ukuran={72} label="Memuat soal" style={{ marginTop: 24, alignSelf: 'center' }} />}
 
         {galat && (
           <View style={styles.kotakGalat}>

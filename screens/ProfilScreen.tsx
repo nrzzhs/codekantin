@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Image, ScrollView,
-  StyleSheet, Alert, ActivityIndicator,
+  StyleSheet, Alert,
 } from 'react-native';
+import { SpinnerTombol } from '../components/Loading';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
@@ -124,7 +125,7 @@ export default function ProfilScreen({ userId, email, profile, onUpdated, onLogo
             )}
             {uploading && (
               <View style={styles.loadingFoto}>
-                <ActivityIndicator color="#fff" />
+                <SpinnerTombol ukuran={20} label="Mengunggah foto" />
               </View>
             )}
           </TouchableOpacity>

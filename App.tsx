@@ -20,6 +20,8 @@ import TumpukanScreen from './screens/TumpukanScreen';
 import TebakScreen from './screens/TebakScreen';
 import ProfilScreen from './screens/ProfilScreen';
 import BandingkanScreen from './screens/BandingkanScreen';
+import KelolaSoalScreen from './screens/KelolaSoalScreen';
+import FormSoalScreen from './screens/FormSoalScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -32,10 +34,11 @@ type TabsProps = {
   userId: string;
   email: string;
   profile: Profile;
+  isGuru: boolean;
   muatProfil: () => Promise<void>;
 };
 
-function Tabs({ userId, email, profile, muatProfil }: TabsProps) {
+function Tabs({ userId, email, profile, isGuru, muatProfil }: TabsProps) {
   return (
     <Tab.Navigator
       screenOptions={{
@@ -74,6 +77,17 @@ function Tabs({ userId, email, profile, muatProfil }: TabsProps) {
       >
         {() => <TebakScreen onProfilBerubah={muatProfil} />}
       </Tab.Screen>
+      {isGuru && (
+        <Tab.Screen
+          name="Kelola"
+          options={{
+            title: 'Soal',
+            tabBarIcon: ({ focused }) => <Ikon emoji="📝" fokus={focused} />,
+          }}
+        >
+          {() => <KelolaSoalScreen userId={userId} />}
+        </Tab.Screen>
+      )}
       <Tab.Screen
         name="Profil"
         options={{ tabBarIcon: ({ focused }) => <Ikon emoji="👤" fokus={focused} /> }}
@@ -101,7 +115,7 @@ export default function App() {
   const muatProfil = useCallback(async (userId: string) => {
     const { data } = await supabase
       .from('profiles')
-      .select('nickname, full_name, school, grade, bio, avatar_url, total_xp, total_points')
+      .select('nickname, full_name, school, grade, bio, avatar_url, total_xp, total_points, role')
       .eq('id', userId)
       .maybeSingle();
     setProfile(data);
@@ -146,36 +160,49 @@ export default function App() {
   }
 
   const userId = session.user.id;
+  const isGuru = profile.role === 'guru';
 
   return (
     <SafeAreaProvider>
-     <BankSoalProvider>
-      <SimulatorProvider userId={userId}>
-        <NavigationContainer>
-          <Stack.Navigator>
-            <Stack.Screen name="Tabs" options={{ headerShown: false }}>
-              {() => (
-                <Tabs
-                  userId={userId}
-                  email={session.user.email ?? ''}
-                  profile={profile}
-                  muatProfil={() => muatProfil(userId)}
+      <BankSoalProvider>
+        <SimulatorProvider userId={userId}>
+          <NavigationContainer>
+            <Stack.Navigator>
+              <Stack.Screen name="Tabs" options={{ headerShown: false }}>
+                {() => (
+                  <Tabs
+                    userId={userId}
+                    email={session.user.email ?? ''}
+                    profile={profile}
+                    isGuru={isGuru}
+                    muatProfil={() => muatProfil(userId)}
+                  />
+                )}
+              </Stack.Screen>
+              <Stack.Screen
+                name="Bandingkan"
+                component={BandingkanScreen}
+                options={{
+                  title: 'Bandingkan Stack vs Queue',
+                  headerStyle: { backgroundColor: warna.latar },
+                  headerShadowVisible: false,
+                }}
+              />
+              {isGuru && (
+                <Stack.Screen
+                  name="FormSoal"
+                  component={FormSoalScreen}
+                  options={({ route }: { route: { params?: any } }) => ({
+                    title: route.params?.soal ? 'Ubah Soal' : 'Soal Baru',
+                    headerStyle: { backgroundColor: warna.latar },
+                    headerShadowVisible: false,
+                  })}
                 />
               )}
-            </Stack.Screen>
-            <Stack.Screen
-              name="Bandingkan"
-              component={BandingkanScreen}
-              options={{
-                title: 'Bandingkan Stack vs Queue',
-                headerStyle: { backgroundColor: warna.latar },
-                headerShadowVisible: false,
-              }}
-            />
-          </Stack.Navigator>
-          <StatusBar style="auto" />
-        </NavigationContainer>
-      </SimulatorProvider>
+            </Stack.Navigator>
+            <StatusBar style="auto" />
+          </NavigationContainer>
+        </SimulatorProvider>
       </BankSoalProvider>
     </SafeAreaProvider>
   );

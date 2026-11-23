@@ -10,6 +10,7 @@ import { supabase } from './lib/supabase';
 import type { Profile } from './lib/types';
 import { warna } from './lib/tema';
 import { SimulatorProvider } from './context/SimulatorContext';
+import { BankSoalProvider } from './context/BankSoalContext';
 import LoginScreen from './screens/LoginScreen';
 import NicknameScreen from './screens/NicknameScreen';
 import ResetPasswordScreen from './screens/ResetPasswordScreen';
@@ -148,6 +149,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
+     <BankSoalProvider>
       <SimulatorProvider userId={userId}>
         <NavigationContainer>
           <Stack.Navigator>
@@ -174,6 +176,7 @@ export default function App() {
           <StatusBar style="auto" />
         </NavigationContainer>
       </SimulatorProvider>
+      </BankSoalProvider>
     </SafeAreaProvider>
   );
 }

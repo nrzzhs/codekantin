@@ -5,12 +5,13 @@ import { supabase } from '../lib/supabase';
 import { warna, fontKode } from '../lib/tema';
 import { useTebak, useRiwayatTebak } from '../context/SimulatorContext';
 import type { SesiTebak, HasilSoal } from '../context/SimulatorContext';
-import { cariSoal } from '../data/soal';
+import { cariSoal as cariSoalBank, BANK_SOAL } from '../data/soal';
+import { susunSesi } from '../logic/sesi';
+import { useBankSoal } from '../context/BankSoalContext';
 import type { Soal, SoalSimulasi, SoalPilihanGanda } from '../data/soal';
 import { INFO_MISKONSEPSI } from '../data/miskonsepsi';
 import type { Miskonsepsi } from '../data/miskonsepsi';
 import {
-  buatSesi,
   hitungKunci,
   pilihanJawaban,
   periksaSimulasi,
@@ -55,6 +56,10 @@ type Props = { onProfilBerubah: () => Promise<void> };
 
 export default function TebakScreen({ onProfilBerubah }: Props) {
   const { nilai: sesi, setNilai: setSesi, siap } = useTebak();
+  const { siap: bankSiap, muatUlang } = useBankSoal();
+  const [memulai, setMemulai] = useState(false);
+  // Soal guru dibaca dari salinan di sesi, supaya tidak berubah di tengah jalan
+  const cariSoal = (id: string) => sesi?.soalSesi?.[id] ?? cariSoalBank(id);
   const { nilai: riwayatMentah, setNilai: setRiwayat, siap: riwayatSiap } = useRiwayatTebak();
 
   const riwayat = Array.isArray(riwayatMentah) ? riwayatMentah : [];
@@ -132,17 +137,26 @@ export default function TebakScreen({ onProfilBerubah }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [riwayatSiap, jumlahTertunda]);
 
-  function mulai() {
-    if (!siap) return;
-    const ids = buatSesi();
-    setSesi({
-      sesiId: buatIdSesi(),
-      idSoal: ids,
-      indeks: 0,
-      hasil: [],
-      draft: buatDraft(cariSoal(ids[0])),
-      diperiksa: false,
-    });
+  async function mulai() {
+    if (!siap || !bankSiap || memulai) return;
+    setMemulai(true);
+    try {
+      // Coba ambil soal guru terbaru (maksimal 2 detik), kalau gagal pakai salinan di HP
+      const soalGuru = await muatUlang(2000);
+      const { idSoal, soalSesi } = susunSesi(BANK_SOAL, soalGuru);
+      const pertama = soalSesi[idSoal[0]] ?? cariSoalBank(idSoal[0]);
+      setSesi({
+        sesiId: buatIdSesi(),
+        soalSesi,
+        idSoal,
+        indeks: 0,
+        hasil: [],
+        draft: buatDraft(pertama),
+        diperiksa: false,
+      });
+    } finally {
+      setMemulai(false);
+    }
   }
 
   function isiSlot(nilai: string) {
@@ -261,7 +275,7 @@ export default function TebakScreen({ onProfilBerubah }: Props) {
             onPress={mulai}
             disabled={!siap}
           >
-            <Text style={styles.tombolHijauTeks}>{siap ? 'Mulai Tantangan' : 'Memuat...'}</Text>
+            <Text style={styles.tombolHijauTeks}>{siap && !memulai ? 'Mulai Tantangan' : 'Memuat...'}</Text>
           </TouchableOpacity>
         </ScrollView>
       </SafeAreaView>
@@ -577,7 +591,10 @@ export default function TebakScreen({ onProfilBerubah }: Props) {
           <View style={[styles.tagPil, { backgroundColor: warnaTag }]}>
             <Text style={styles.tagPilTeks}>{tag}</Text>
           </View>
-          <Text style={styles.nomor}>Soal {sesiAktif.indeks + 1} dari {total}</Text>
+            <Text style={styles.nomor}>
+              Soal {sesiAktif.indeks + 1} dari {total}
+              {soal.id.startsWith('guru:') ? ' • dari guru' : ''}
+            </Text>
         </View>
         <View style={styles.progresLatar}>
           <View style={[styles.progresIsi, { width: `${Math.round(progres * 100)}%` }]} />

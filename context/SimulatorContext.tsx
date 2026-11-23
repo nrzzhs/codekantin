@@ -8,6 +8,7 @@ import {
 import { useSimulator } from '../hooks/useSimulator';
 import { useTersimpan } from '../hooks/useTersimpan';
 import type { Miskonsepsi } from '../data/miskonsepsi';
+import type { Soal } from '../data/soal';
 import type { CatatanSesi } from '../logic/hadiah';
 
 export const KAPASITAS = 5;
@@ -26,6 +27,7 @@ export type HasilSoal = {
 
 export type SesiTebak = {
   sesiId: string;              // dipakai server agar sesi tidak dihitung dua kali
+  soalSesi?: Record<string, Soal>; // salinan soal guru yang dipakai di sesi ini
   idSoal: string[];            // soal dalam sesi ini, berurutan
   indeks: number;              // soal yang sedang dikerjakan (0-based)
   hasil: HasilSoal[];          // jawaban yang sudah diperiksa

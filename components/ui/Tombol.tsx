@@ -11,7 +11,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { SpinnerTombol } from '../Loading';
 import { font, radius, warna } from '../../lib/tema';
 
-export type VarianTombol = 'utama' | 'sekunder' | 'antrean' | 'tumpukan' | 'tebak';
+export type VarianTombol = 'utama' | 'sekunder' | 'antrean' | 'tumpukan';
 
 type Props = {
   label: string;
@@ -20,10 +20,6 @@ type Props = {
   memuat?: boolean;
   nonaktif?: boolean;
   ikon?: ComponentProps<typeof Ionicons>['name'];
-  /** Letak ikon terhadap label. Bawaan kiri. */
-  posisiIkon?: 'kiri' | 'kanan';
-  /** Warna latar kustom (teks putih); menggantikan warna varian. */
-  warnaLatar?: string;
   accessibilityLabel?: string;
   accessibilityHint?: string;
   style?: StyleProp<ViewStyle>;
@@ -36,7 +32,6 @@ const WARNA: Record<VarianTombol, { latar: string; bayangan: string; teks: strin
   utama: { latar: '#15803D', bayangan: '#0F5A2B', teks: '#FFFFFF' },
   antrean: { latar: '#0369A1', bayangan: '#024B73', teks: '#FFFFFF' },
   tumpukan: { latar: '#C2410C', bayangan: '#8A2E08', teks: '#FFFFFF' },
-  tebak: { latar: warna.ungu, bayangan: warna.unguTua, teks: '#FFFFFF' },
   sekunder: { latar: '#FFFFFF', bayangan: warna.garis, teks: warna.teks, garis: warna.garis },
 };
 
@@ -49,8 +44,6 @@ export default function Tombol({
   memuat = false,
   nonaktif = false,
   ikon,
-  posisiIkon = 'kiri',
-  warnaLatar,
   accessibilityLabel,
   accessibilityHint,
   style,
@@ -60,9 +53,7 @@ export default function Tombol({
   const tidakBisa = nonaktif || memuat;
   // Tombol nonaktif digambar "sudah tertekan" dan tanpa bayangan
   const datar = nonaktif && !memuat;
-  const w = warnaLatar
-    ? { latar: warnaLatar, bayangan: warnaLatar, teks: '#FFFFFF', garis: undefined }
-    : WARNA[varian];
+  const w = WARNA[varian];
   const latar = datar ? NONAKTIF.latar : w.latar;
   const teks = datar ? NONAKTIF.teks : w.teks;
 
@@ -73,12 +64,6 @@ export default function Tombol({
     turun.set(kurangiGerak ? tujuan : withTiming(tujuan, { duration: masuk ? 60 : 120 }));
     if (masuk) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
   }
-
-  const elIkon = memuat ? (
-    <SpinnerTombol warna={teks} ukuran={18} label={label} />
-  ) : ikon ? (
-    <Ionicons name={ikon} size={20} color={teks} />
-  ) : null;
 
   return (
     <Pressable
@@ -92,12 +77,7 @@ export default function Tombol({
       accessibilityState={{ disabled: tidakBisa, busy: memuat }}
       style={[styles.wadah, style]}
     >
-      {!datar && (
-        <View style={[styles.bayangan, { backgroundColor: w.bayangan }]}>
-          {/* Warna kustom: bayangan digelapkan dengan lapisan hitam tipis */}
-          {warnaLatar && <View style={styles.gelapkan} />}
-        </View>
-      )}
+      {!datar && <View style={[styles.bayangan, { backgroundColor: w.bayangan }]} />}
       <Animated.View
         style={[
           styles.muka,
@@ -106,11 +86,14 @@ export default function Tombol({
           gayaMuka,
         ]}
       >
-        {(memuat || posisiIkon === 'kiri') && elIkon}
+        {memuat ? (
+          <SpinnerTombol warna={teks} ukuran={18} label={label} />
+        ) : ikon ? (
+          <Ionicons name={ikon} size={20} color={teks} />
+        ) : null}
         <Text style={[styles.label, { color: teks }]} numberOfLines={1}>
           {label}
         </Text>
-        {!memuat && posisiIkon === 'kanan' && elIkon}
       </Animated.View>
     </Pressable>
   );
@@ -125,9 +108,7 @@ const styles = StyleSheet.create({
     top: TURUN,
     height: TINGGI,
     borderRadius: radius.tombol,
-    overflow: 'hidden',
   },
-  gelapkan: { flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
   muka: {
     position: 'absolute',
     left: 0,
@@ -140,5 +121,5 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingHorizontal: 20,
   },
-  label: { fontFamily: font.tebal, fontSize: 16, flexShrink: 1 },
+  label: { fontFamily: font.tebal, fontSize: 16 },
 });

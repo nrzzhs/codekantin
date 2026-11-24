@@ -34,17 +34,15 @@ const PASANGAN: [string, string, string][] = [
   ['putih di tombol utama hijau', PUTIH, warna.hijau],
   ['teks syarat terpenuhi di kartu putih', warna.hijauTeks, PUTIH],
   // Tampilan tahap 3 (Beranda)
-  ['ungu Tebak di kotak preview', warna.ungu, warna.kotakKode],
-  ['ungu di tag & ikon Tebak', warna.ungu, warna.unguMuda],
+  ['chip ungu Tebak', warna.ungu, warna.unguMuda],
   ['putih di tombol Tebak', PUTIH, warna.ungu],
-  ['biru di tag Antrean & panel QUEUE', warna.biru, warna.biruMuda],
-  ['persik tua di tag Tumpukan, panel STACK & pil poin', warna.persikTeks, warna.oranyeMuda],
-  ['biru di kotak preview', warna.biru, warna.kotakKode],
-  ['persik tua di kotak preview', warna.persikTeks, warna.kotakKode],
-  ['teks abu terang di banner gelap', '#CBD5E1', warna.gelap],
-  ['tahap lencana belum tercapai di banner', '#94A3B8', warna.gelap],
-  ['toska di banner gelap', '#5EEAD4', warna.gelap],
-  ['putih di tombol Tumpukan', PUTIH, warna.oranye],
+  ['chip biru Queue', warna.biru, warna.biruMuda],
+  ['chip Stack & pil poin', warna.persikTeks, warna.oranyeMuda],
+  ['angka XP di kartu maskot', '#CBD5E1', warna.gelap],
+  ['petunjuk "Ketuk Koki Piri"', '#94A3B8', warna.gelap],
+  ['teks pil Lv di toska', warna.gelap, '#5EEAD4'],
+  ['putih di tombol Stack', PUTIH, warna.oranye],
+  ['putih di tombol Queue', PUTIH, warna.biru],
 ];
 
 describe('Kontras warna (WCAG AA, teks normal minimal 4,5:1)', () => {

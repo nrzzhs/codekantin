@@ -16,7 +16,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.nurazizahs.CodeKantin"
+      "package": "com.nurazizahs.CodeKantin",
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"

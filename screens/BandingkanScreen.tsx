@@ -1,8 +1,21 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import { useReducedMotion } from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 import { Stack } from '../logic/Stack';
 import { Queue } from '../logic/Queue';
-import { warna } from '../lib/tema';
+import { font, warna } from '../lib/tema';
 import { KAPASITAS, useBandingkan } from '../context/SimulatorContext';
+import Kartu from '../components/ui/Kartu';
+import Tombol from '../components/ui/Tombol';
+import KokiPiri from '../components/ilustrasi/KokiPiri';
+import type { JenisMakanan } from '../components/ilustrasi/Makanan';
+import HeaderBandingkan from '../components/bandingkan/HeaderBandingkan';
+import UbinBahan from '../components/bandingkan/UbinBahan';
+import PanelStruktur, { type ItemPanel } from '../components/bandingkan/PanelStruktur';
+import KartuUrutanKeluar from '../components/bandingkan/KartuUrutanKeluar';
 
 const BAHAN = [
   { nama: 'Burger', emoji: '🍔' },
@@ -10,10 +23,25 @@ const BAHAN = [
   { nama: 'Donat', emoji: '🍩' },
 ];
 
+// Jeda antar elemen saat "Keluarkan Semua" ditampilkan bertahap
+const JEDA_KELUAR = 650;
+
+// Teks gelembung Koki Piri untuk keadaan sebelum hasil keluar (teks UI, bukan data)
+const PESAN_KOSONG = 'Ketuk makanan di atas, lalu tekan Keluarkan Semua.';
+const PESAN_ADA_ISI = 'Masuknya sama persis. Coba tebak: siapa yang keluar duluan?';
+const PESAN_BERJALAN = 'Mengeluarkan satu per satu…';
+
 export default function BandingkanScreen() {
+  const navigation = useNavigation<any>();
+  const kurangiGerak = useReducedMotion();
   const { nilai, setNilai, siap } = useBandingkan();
   const masuk = Array.isArray(nilai.masuk) ? nilai.masuk : [];
   const dikeluarkan = !!nilai.dikeluarkan;
+
+  // Tampilan bertahap: berapa elemen yang sudah terlihat keluar (null = tidak sedang berjalan)
+  const [langkah, setLangkah] = useState<number | null>(null);
+  const [lompatan, setLompatan] = useState(0);
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const penuh = masuk.length >= KAPASITAS;
   const terkunci = !siap || dikeluarkan || penuh;
@@ -61,175 +89,164 @@ export default function BandingkanScreen() {
       'Input sama, output berbeda: Queue mengeluarkan sesuai urutan masuk (FIFO), sedangkan Stack mengeluarkan terbalik (LIFO).';
   }
 
+  // ===== Tampilan bertahap (hanya tampilan; datanya sudah dikeluarkan semua oleh keluarkan()) =====
+  function hentikanTimer() {
+    if (timer.current) {
+      clearInterval(timer.current);
+      timer.current = null;
+    }
+  }
+
+  // Bersihkan timer saat layar ditutup
+  useEffect(
+    () => () => {
+      if (timer.current) clearInterval(timer.current);
+    },
+    [],
+  );
+
+  function selesaiKeluar() {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    setLompatan((l) => l + 1);
+  }
+
+  function keluarkanBertahap() {
+    if (!siap || masuk.length === 0 || dikeluarkan) return;
+    keluarkan();
+    if (kurangiGerak) {
+      selesaiKeluar();
+      return;
+    }
+    const n = masuk.length;
+    let i = 0;
+    setLangkah(0);
+    hentikanTimer();
+    timer.current = setInterval(() => {
+      i += 1;
+      if (i >= n) {
+        hentikanTimer();
+        setLangkah(null);
+        selesaiKeluar();
+      } else {
+        setLangkah(i);
+      }
+    }, JEDA_KELUAR);
+  }
+
+  function ulangiSemua() {
+    hentikanTimer();
+    setLangkah(null);
+    ulangi();
+  }
+
+  const n = masuk.length;
+  const berjalan = dikeluarkan && langkah !== null;
+  const sudahKeluar = dikeluarkan ? (langkah ?? n) : 0;
+
+  // Kunci elemen = posisinya di urutan masuk, supaya animasi muncul/keluar tepat sasaran
+  const itemQueue: ItemPanel[] = dikeluarkan
+    ? keluarQueue.slice(sudahKeluar).map((x, j) => ({ kunci: `m-${sudahKeluar + j}`, isi: x }))
+    : isiQueue.map((x, j) => ({ kunci: `m-${j}`, isi: x }));
+  const itemStack: ItemPanel[] = dikeluarkan
+    ? keluarStack.slice(sudahKeluar).map((x, j) => ({ kunci: `m-${n - 1 - (sudahKeluar + j)}`, isi: x }))
+    : isiStack.map((x, j) => ({ kunci: `m-${n - 1 - j}`, isi: x }));
+
+  const selesai = dikeluarkan && !berjalan;
+  const pesan = n === 0 ? PESAN_KOSONG : !dikeluarkan ? PESAN_ADA_ISI : berjalan ? PESAN_BERJALAN : kesimpulan;
+
   return (
-    <ScrollView style={styles.latar} contentContainerStyle={styles.isi}>
-      {/* Urutan masuk */}
-      <View style={styles.kartu}>
-        <View style={styles.barisAtas}>
-          <Text style={styles.judul}>Urutan Masuk Makanan</Text>
-          <Text style={styles.kapasitas}>{masuk.length}/{KAPASITAS}</Text>
-        </View>
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.isi}>
+        <HeaderBandingkan onKembali={() => navigation.goBack()} onUlangi={ulangiSemua} />
 
-        <View style={styles.bahanBaris}>
-          {BAHAN.map((b) => (
-            <TouchableOpacity
-              key={b.nama}
-              style={[styles.bahan, terkunci && styles.mati]}
-              onPress={() => tambah(b.nama, b.emoji)}
-              disabled={terkunci}
-            >
-              <Text style={styles.bahanEmoji}>{b.emoji}</Text>
-              <Text style={styles.bahanNama}>{b.nama}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={styles.petunjuk}>
-          {penuh ? 'Kapasitas penuh.' : 'Tap bahan untuk menambah. Bahan yang sama boleh dipilih berulang.'}
-        </Text>
-
-        <View style={styles.urutan}>
-          {masuk.length === 0 ? (
-            <Text style={styles.kosong}>Belum ada item</Text>
-          ) : (
-            masuk.map((x, i) => (
-              <Text key={`${x}-${i}`} style={styles.urutanItem}>{i + 1}. {x}</Text>
-            ))
-          )}
-        </View>
-      </View>
-
-      {/* Dua struktur berdampingan */}
-      <View style={styles.duaKolom}>
-        <View style={[styles.panel, { backgroundColor: warna.biruMuda, borderColor: '#BAE6FD' }]}>
-          <Text style={[styles.panelJudul, { color: warna.biru }]}>QUEUE</Text>
-          <Text style={styles.panelSub}>FIFO • FRONT → REAR</Text>
-          {isiQueue.length === 0 ? (
-            <Text style={styles.panelKosong}>{dikeluarkan ? 'Sudah kosong' : 'Kosong'}</Text>
-          ) : (
-            isiQueue.map((x, i) => (
-              <View key={`q-${i}`} style={styles.elemen}>
-                <Text style={styles.elemenTeks} numberOfLines={1}>{x}</Text>
-                {i === 0 && <Text style={[styles.tag, { backgroundColor: warna.biru }]}>FRONT</Text>}
-                {i === isiQueue.length - 1 && i !== 0 && (
-                  <Text style={[styles.tag, { backgroundColor: warna.oranye }]}>REAR</Text>
-                )}
-              </View>
-            ))
-          )}
-        </View>
-
-        <View style={[styles.panel, { backgroundColor: warna.oranyeMuda, borderColor: '#FED7AA' }]}>
-          <Text style={[styles.panelJudul, { color: '#C2410C' }]}>STACK</Text>
-          <Text style={styles.panelSub}>LIFO • TOP → DASAR</Text>
-          {isiStack.length === 0 ? (
-            <Text style={styles.panelKosong}>{dikeluarkan ? 'Sudah kosong' : 'Kosong'}</Text>
-          ) : (
-            isiStack.map((x, i) => (
-              <View key={`s-${i}`} style={styles.elemen}>
-                <Text style={styles.elemenTeks} numberOfLines={1}>{x}</Text>
-                {i === 0 && <Text style={[styles.tag, { backgroundColor: warna.oranye }]}>TOP</Text>}
-              </View>
-            ))
-          )}
-        </View>
-      </View>
-
-      {/* Tombol */}
-      <TouchableOpacity
-        style={[styles.tombolHijau, (masuk.length === 0 || dikeluarkan || !siap) && styles.mati]}
-        onPress={keluarkan}
-        disabled={masuk.length === 0 || dikeluarkan || !siap}
-      >
-        <Text style={styles.tombolHijauTeks}>Keluarkan Semua (Dequeue & Pop)</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.tombolUlang} onPress={ulangi}>
-        <Text style={styles.tombolUlangTeks}>↺ Ulangi Simulasi (Reset)</Text>
-      </TouchableOpacity>
-
-      {/* Hasil */}
-      {dikeluarkan && (
-        <View style={styles.kartu}>
-          <Text style={styles.judul}>Hasil Perbandingan Urutan Keluar</Text>
-
-          <View style={[styles.hasil, { backgroundColor: warna.biruMuda }]}>
-            <Text style={[styles.hasilJudul, { color: warna.biru }]}>Antrean (Queue) · FIFO</Text>
-            {keluarQueue.map((x, i) => (
-              <Text key={`kq-${i}`} style={styles.hasilItem}>{i + 1}. {x}</Text>
+        {/* Masukkan makanan */}
+        <Kartu style={styles.kartuMasuk}>
+          <View style={styles.barisJudul}>
+            <Text style={styles.judulKartu}>Masukkan makanan</Text>
+            <View style={styles.pil} accessible accessibilityLabel={`${n} dari ${KAPASITAS} terisi`}>
+              <Text style={styles.pilTeks}>
+                {n}/{KAPASITAS}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.barisUbin}>
+            {BAHAN.map((b, i) => (
+              <UbinBahan
+                key={b.nama}
+                nama={b.nama}
+                jenis={b.nama.toLowerCase() as JenisMakanan}
+                urutan={i}
+                nonaktif={terkunci}
+                onPress={() => tambah(b.nama, b.emoji)}
+              />
             ))}
           </View>
+        </Kartu>
 
-          <View style={[styles.hasil, { backgroundColor: warna.oranyeMuda }]}>
-            <Text style={[styles.hasilJudul, { color: '#C2410C' }]}>Tumpukan (Stack) · LIFO</Text>
-            {keluarStack.map((x, i) => (
-              <Text key={`ks-${i}`} style={styles.hasilItem}>{i + 1}. {x}</Text>
-            ))}
+        {/* Dua struktur berdampingan */}
+        <View style={styles.duaPanel}>
+          <PanelStruktur jenis="queue" item={itemQueue} />
+          <PanelStruktur jenis="stack" item={itemStack} />
+        </View>
+
+        <Tombol
+          label="Keluarkan Semua"
+          varian="utama"
+          ikon="play"
+          tinggi={58}
+          sudut={20}
+          onPress={keluarkanBertahap}
+          nonaktif={n === 0 || dikeluarkan || !siap}
+          accessibilityHint="Dequeue dan pop semua elemen"
+        />
+
+        {dikeluarkan && (
+          <KartuUrutanKeluar
+            queue={keluarQueue.slice(0, sudahKeluar)}
+            stack={keluarStack.slice(0, sudahKeluar)}
+          />
+        )}
+
+        {/* Koki Piri + kesimpulan */}
+        <View
+          style={styles.reaksi}
+          accessible
+          accessibilityLiveRegion="polite"
+          accessibilityLabel={`Koki Piri: ${pesan}`}
+        >
+          <KokiPiri ukuran={56} lompatan={lompatan} tinggiLompat={8} ekspresi={selesai ? 'tertawa' : 'senang'} />
+          <View style={[styles.gelembung, selesai && styles.gelembungSelesai]}>
+            <Text style={styles.gelembungTeks}>{pesan}</Text>
           </View>
         </View>
-      )}
-
-      <View style={styles.kesimpulan}>
-        <Text style={styles.kesimpulanJudul}>⚡ Kesimpulan Kilat</Text>
-        <Text style={styles.kesimpulanIsi}>{kesimpulan}</Text>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  latar: { flex: 1, backgroundColor: warna.latar },
-  isi: { padding: 18, paddingBottom: 36 },
+  safe: { flex: 1, backgroundColor: warna.latar },
+  isi: { padding: 20, paddingBottom: 32, gap: 14 },
 
-  kartu: {
-    backgroundColor: warna.kartu, borderRadius: 20, borderWidth: 1,
-    borderColor: warna.garis, padding: 18, marginBottom: 14,
+  kartuMasuk: { borderRadius: 22, gap: 12 },
+  barisJudul: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  judulKartu: { fontFamily: font.judul, fontSize: 15, color: warna.teks },
+  pil: { backgroundColor: warna.garis, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  pilTeks: { fontFamily: font.judul, fontSize: 12, color: warna.teksRedup },
+  barisUbin: { flexDirection: 'row', gap: 10 },
+
+  duaPanel: { flexDirection: 'row', gap: 10 },
+
+  reaksi: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  gelembung: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: warna.garis,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
-  barisAtas: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  judul: { fontSize: 18, fontWeight: '800', color: warna.teks },
-  kapasitas: { fontWeight: '700', color: warna.teksRedup },
-
-  bahanBaris: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  bahan: {
-    flex: 1, alignItems: 'center', backgroundColor: warna.latar, borderRadius: 14,
-    borderWidth: 1, borderColor: warna.garis, paddingVertical: 14,
-  },
-  bahanEmoji: { fontSize: 28 },
-  bahanNama: { fontWeight: '700', color: warna.teks, marginTop: 4 },
-  petunjuk: { color: warna.teksRedup, fontSize: 12, marginTop: 10 },
-
-  urutan: { backgroundColor: warna.kotakKode, borderRadius: 12, padding: 12, marginTop: 12 },
-  urutanItem: { color: warna.teks, fontWeight: '600', lineHeight: 22 },
-  kosong: { color: '#B0A79E' },
-
-  duaKolom: { flexDirection: 'row', gap: 10, marginBottom: 14 },
-  panel: { flex: 1, borderRadius: 16, borderWidth: 1, padding: 12 },
-  panelJudul: { fontWeight: '800', fontSize: 14 },
-  panelSub: { color: warna.teksRedup, fontSize: 11, marginTop: 2, marginBottom: 10 },
-  panelKosong: { color: '#B0A79E', fontSize: 12, fontStyle: 'italic' },
-  elemen: { backgroundColor: '#fff', borderRadius: 10, padding: 8, marginBottom: 6 },
-  elemenTeks: { fontWeight: '600', color: warna.teks, fontSize: 12 },
-  tag: {
-    alignSelf: 'flex-start', color: '#fff', fontSize: 9, fontWeight: '800',
-    paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, overflow: 'hidden', marginTop: 4,
-  },
-
-  tombolHijau: { backgroundColor: warna.hijau, borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
-  tombolHijauTeks: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  tombolUlang: {
-    borderRadius: 14, borderWidth: 1, borderColor: warna.garis, backgroundColor: '#fff',
-    paddingVertical: 14, alignItems: 'center', marginTop: 10, marginBottom: 14,
-  },
-  tombolUlangTeks: { color: warna.teks, fontWeight: '700' },
-  mati: { opacity: 0.4 },
-
-  hasil: { borderRadius: 14, padding: 14, marginTop: 12 },
-  hasilJudul: { fontWeight: '800', marginBottom: 6 },
-  hasilItem: { color: warna.teks, fontWeight: '600', lineHeight: 22 },
-
-  kesimpulan: {
-    backgroundColor: warna.kotakKode, borderRadius: 16, borderWidth: 1,
-    borderColor: '#F5C9B5', padding: 16,
-  },
-  kesimpulanJudul: { fontWeight: '800', color: '#7C2D12', marginBottom: 6 },
-  kesimpulanIsi: { color: '#7C2D12', lineHeight: 20 },
+  gelembungSelesai: { borderColor: '#86EFAC' },
+  gelembungTeks: { fontFamily: font.tebal, fontSize: 13, lineHeight: 19, color: warna.teks },
 });

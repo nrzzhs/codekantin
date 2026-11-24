@@ -218,8 +218,8 @@ export default function App() {
                 component={BandingkanScreen}
                 options={{
                   title: 'Bandingkan Stack vs Queue',
-                  headerStyle: { backgroundColor: warna.latar },
-                  headerShadowVisible: false,
+                  // Layar ini punya header sendiri dengan tombol kembali
+                  headerShown: false,
                 }}
               />
               {isGuru && (

@@ -17,6 +17,7 @@ import IlustrasiStack from '../components/ilustrasi/IlustrasiStack';
 import IlustrasiTebak from '../components/ilustrasi/IlustrasiTebak';
 import IlustrasiBandingkan from '../components/ilustrasi/IlustrasiBandingkan';
 import { font, warna } from '../lib/tema';
+import { infoLencana } from '../lib/lencana';
 import { FAKTA, hitungLencana } from '../data/beranda';
 import { POIN_MAKS } from '../logic/hadiah';
 import { KAPASITAS, useAntrean, useTumpukan, useTebak } from '../context/SimulatorContext';
@@ -35,28 +36,6 @@ const TRACK = '#334155';
 const TEKS_TERANG = '#CBD5E1';
 const TEKS_REDUP = '#94A3B8';
 
-// Ambang sama dengan LENCANA di data/beranda.ts (tidak diekspor, jadi disalin di sini).
-// hitungLencana() hanya memberi teks & progres; nama, level, dan ambang dihitung di sini.
-const TAHAP_LENCANA = [
-  { xp: 0, nama: 'Koki Magang' },
-  { xp: 100, nama: 'Koki Muda' },
-  { xp: 300, nama: 'Koki Handal' },
-  { xp: 600, nama: 'Master Koki LIFO/FIFO' },
-];
-
-function infoLencana(xp: number) {
-  let indeks = 0;
-  TAHAP_LENCANA.forEach((t, i) => {
-    if (xp >= t.xp) indeks = i;
-  });
-  const berikutnya = TAHAP_LENCANA[indeks + 1] ?? null;
-  return {
-    nama: TAHAP_LENCANA[indeks].nama,
-    level: indeks + 1,
-    berikutnya,
-    sisa: berikutnya ? berikutnya.xp - xp : 0,
-  };
-}
 
 export default function BerandaScreen({ nickname, avatarUrl, points, xp, onRefresh }: Props) {
   const navigation = useNavigation<any>();

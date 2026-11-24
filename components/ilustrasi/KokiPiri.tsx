@@ -23,8 +23,11 @@ type Props = {
   lompatan?: number;
   /** Tinggi lompatan dalam px. Bawaan 18. */
   tinggiLompat?: number;
-  /** 'kaget': mulut terbuka dan tetes keringat. Bawaan 'senang'. */
-  ekspresi?: 'senang' | 'kaget';
+  /**
+   * 'senang' (bawaan): senyum. 'tertawa': mulut tertawa. 'gembira': mulut tertawa + mata
+   * melengkung. 'kaget': mulut terbuka dan tetes keringat.
+   */
+  ekspresi?: 'senang' | 'tertawa' | 'gembira' | 'kaget';
 };
 
 /**
@@ -39,6 +42,8 @@ export default function KokiPiri({
 }: Props) {
   const kurangiGerak = useReducedMotion();
   const kaget = ekspresi === 'kaget';
+  const gembira = ekspresi === 'gembira';
+  const tertawa = ekspresi === 'tertawa' || gembira;
   const layang = useAyun(-5, 1200);
   const loncat = useSharedValue(0);
   const miring = useSharedValue(0);
@@ -98,6 +103,12 @@ export default function KokiPiri({
             <Ellipse cx={60} cy={86} rx={6} ry={7} fill="#1F1A17" />
             <Path d="M92 44c4 6 4 10 0 12-4-2-4-6 0-12z" fill="#7DD3FC" />
           </>
+        ) : tertawa ? (
+          <>
+            {/* Mulut tertawa: terbuka lebar dengan lidah */}
+            <Path d="M49 80h22q0 13-11 13t-11-13z" fill="#1F1A17" strokeLinejoin="round" />
+            <Ellipse cx={60} cy={89} rx={5} ry={2.5} fill="#F87171" />
+          </>
         ) : (
           <Path d="M51 82q9 9 18 0" fill="none" stroke="#1F1A17" strokeWidth={3} strokeLinecap="round" />
         )}
@@ -124,10 +135,23 @@ export default function KokiPiri({
           style={[StyleSheet.absoluteFill, { transformOrigin: '50% 58.33%' }, gayaMata]}
         >
           <Svg width="100%" height="100%" viewBox={VB}>
-            <Ellipse cx={48} cy={70} rx={4} ry={5} fill="#1F1A17" />
-            <Ellipse cx={72} cy={70} rx={4} ry={5} fill="#1F1A17" />
-            <Circle cx={49.5} cy={68} r={1.4} fill="#FFFFFF" />
-            <Circle cx={73.5} cy={68} r={1.4} fill="#FFFFFF" />
+            {gembira ? (
+              // Mata melengkung senang
+              <Path
+                d="M44 70q4-6 8 0M68 70q4-6 8 0"
+                fill="none"
+                stroke="#1F1A17"
+                strokeWidth={3}
+                strokeLinecap="round"
+              />
+            ) : (
+              <>
+                <Ellipse cx={48} cy={70} rx={4} ry={5} fill="#1F1A17" />
+                <Ellipse cx={72} cy={70} rx={4} ry={5} fill="#1F1A17" />
+                <Circle cx={49.5} cy={68} r={1.4} fill="#FFFFFF" />
+                <Circle cx={73.5} cy={68} r={1.4} fill="#FFFFFF" />
+              </>
+            )}
           </Svg>
         </Animated.View>
       </Animated.View>

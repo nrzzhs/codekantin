@@ -61,6 +61,8 @@ const PASANGAN: [string, string, string][] = [
   ['tombol Cek Jawaban nonaktif', warna.teksRedup, warna.unguMuda],
   // Tampilan tahap 6 (Bandingkan)
   ['label TOP & pil LIFO di putih', warna.persikTeks, PUTIH],
+  // Tampilan tahap 7 (Profil)
+  ['teks tombol Keluar di putih', '#B91C1C', PUTIH],
 ];
 
 describe('Kontras warna (WCAG AA, teks normal minimal 4,5:1)', () => {

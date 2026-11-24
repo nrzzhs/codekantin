@@ -59,6 +59,8 @@ const PASANGAN: [string, string, string][] = [
   ['judul "Benar sekali!" di lembar hijau', warna.hijau, '#F0FDF4'],
   ['label HASIL TANTANGAN di kartu juara', warna.unguMuda, warna.ungu],
   ['tombol Cek Jawaban nonaktif', warna.teksRedup, warna.unguMuda],
+  // Tampilan tahap 6 (Bandingkan)
+  ['label TOP & pil LIFO di putih', warna.persikTeks, PUTIH],
 ];
 
 describe('Kontras warna (WCAG AA, teks normal minimal 4,5:1)', () => {

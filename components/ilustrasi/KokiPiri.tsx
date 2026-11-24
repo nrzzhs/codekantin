@@ -21,14 +21,24 @@ type Props = {
   ukuran?: number;
   /** Naikkan angka ini untuk membuat Koki Piri melompat (mis. setiap kali diketuk). */
   lompatan?: number;
+  /** Tinggi lompatan dalam px. Bawaan 18. */
+  tinggiLompat?: number;
+  /** 'kaget': mulut terbuka dan tetes keringat. Bawaan 'senang'. */
+  ekspresi?: 'senang' | 'kaget';
 };
 
 /**
  * Maskot "Koki Piri": piring berwajah bertopi koki. Melayang terus, berkedip,
  * dan melompat sambil miring saat `lompatan` bertambah. Diam kalau "kurangi gerakan" aktif.
  */
-export default function KokiPiri({ ukuran = 104, lompatan = 0 }: Props) {
+export default function KokiPiri({
+  ukuran = 104,
+  lompatan = 0,
+  tinggiLompat = 18,
+  ekspresi = 'senang',
+}: Props) {
   const kurangiGerak = useReducedMotion();
+  const kaget = ekspresi === 'kaget';
   const layang = useAyun(-5, 1200);
   const loncat = useSharedValue(0);
   const miring = useSharedValue(0);
@@ -53,14 +63,15 @@ export default function KokiPiri({ ukuran = 104, lompatan = 0 }: Props) {
     return () => cancelAnimation(kedip);
   }, [kurangiGerak, kedip]);
 
-  // Lompat 18 px sambil miring ±8° bergantian, mendarat dengan pegas (±600 ms)
+  // Lompat (bawaan 18 px) sambil miring bergantian, mendarat dengan pegas (±600 ms)
   useEffect(() => {
     if (lompatan === 0 || kurangiGerak) return;
-    const arah = lompatan % 2 === 0 ? -8 : 8;
+    const sudut = (8 * tinggiLompat) / 18;
+    const arah = lompatan % 2 === 0 ? -sudut : sudut;
     const pegas = { damping: 9, stiffness: 180 };
-    loncat.set(withSequence(withTiming(-18, { duration: 180 }), withSpring(0, pegas)));
+    loncat.set(withSequence(withTiming(-tinggiLompat, { duration: 180 }), withSpring(0, pegas)));
     miring.set(withSequence(withTiming(arah, { duration: 180 }), withSpring(0, pegas)));
-  }, [lompatan, kurangiGerak, loncat, miring]);
+  }, [lompatan, tinggiLompat, kurangiGerak, loncat, miring]);
 
   const gayaTubuh = useAnimatedStyle(() => ({
     transform: [{ translateY: layang.get() + loncat.get() }, { rotate: `${miring.get()}deg` }],
@@ -81,8 +92,15 @@ export default function KokiPiri({ ukuran = 104, lompatan = 0 }: Props) {
         {/* Pipi */}
         <Ellipse cx={40} cy={82} rx={6} ry={3.5} fill="#FDBA8C" />
         <Ellipse cx={80} cy={82} rx={6} ry={3.5} fill="#FDBA8C" />
-        {/* Senyum */}
-        <Path d="M51 82q9 9 18 0" fill="none" stroke="#1F1A17" strokeWidth={3} strokeLinecap="round" />
+        {kaget ? (
+          <>
+            {/* Mulut terbuka + tetes keringat */}
+            <Ellipse cx={60} cy={86} rx={6} ry={7} fill="#1F1A17" />
+            <Path d="M92 44c4 6 4 10 0 12-4-2-4-6 0-12z" fill="#7DD3FC" />
+          </>
+        ) : (
+          <Path d="M51 82q9 9 18 0" fill="none" stroke="#1F1A17" strokeWidth={3} strokeLinecap="round" />
+        )}
         {/* Topi koki (di atas wajah agar pita topinya terlihat) */}
         <Path
           d="M38 40a14 14 0 0 1 12-22 16 16 0 0 1 20 0 14 14 0 0 1 12 22z"

@@ -43,6 +43,16 @@ const PASANGAN: [string, string, string][] = [
   ['teks pil Lv di toska', warna.gelap, '#5EEAD4'],
   ['putih di tombol Stack', PUTIH, warna.oranye],
   ['putih di tombol Queue', PUTIH, warna.biru],
+  // Tampilan tahap 4 (simulasi Antrean & Tumpukan)
+  ['kode galat di gelembung merah', '#B91C1C', '#FEF2F2'],
+  ['kode berhasil di gelembung hijau', warna.hijauTua, '#F0FDF4'],
+  ['baris pseudocode dilewati', '#7C8BA1', warna.gelap],
+  ['nomor baris yang sudah dijalankan', '#94A3B8', '#1E293B'],
+  ['baris pseudocode sudah dijalankan', '#E2E8F0', '#1E293B'],
+  ['teks dalam kutip di panel inspeksi', '#FCD34D', warna.gelap],
+  ['angka & null di panel inspeksi', '#F9A8D4', warna.gelap],
+  ['biru di pil nama & ukuran panggung', warna.biru, PUTIH],
+  ['putih di baris pseudocode galat', PUTIH, '#B91C1C'],
 ];
 
 describe('Kontras warna (WCAG AA, teks normal minimal 4,5:1)', () => {

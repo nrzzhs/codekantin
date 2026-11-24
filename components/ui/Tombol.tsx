@@ -23,9 +23,12 @@ type Props = {
   accessibilityLabel?: string;
   accessibilityHint?: string;
   style?: StyleProp<ViewStyle>;
+  /** Tombol besar untuk operasi utama (tinggi 56). */
+  besar?: boolean;
 };
 
 const TINGGI = 52;
+const TINGGI_BESAR = 56;
 const TURUN = 4; // jarak bayangan padat di bawah tombol
 
 const WARNA: Record<VarianTombol, { latar: string; bayangan: string; teks: string; garis?: string }> = {
@@ -47,6 +50,7 @@ export default function Tombol({
   accessibilityLabel,
   accessibilityHint,
   style,
+  besar = false,
 }: Props) {
   const kurangiGerak = useReducedMotion();
   const turun = useSharedValue(0);
@@ -75,12 +79,15 @@ export default function Tombol({
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: tidakBisa, busy: memuat }}
-      style={[styles.wadah, style]}
+      style={[styles.wadah, besar && styles.wadahBesar, style]}
     >
-      {!datar && <View style={[styles.bayangan, { backgroundColor: w.bayangan }]} />}
+      {!datar && (
+        <View style={[styles.bayangan, besar && styles.bentukBesar, { backgroundColor: w.bayangan }]} />
+      )}
       <Animated.View
         style={[
           styles.muka,
+          besar && styles.bentukBesar,
           { backgroundColor: latar, top: datar ? TURUN : 0 },
           w.garis && !datar ? { borderWidth: 2, borderColor: w.garis } : null,
           gayaMuka,
@@ -91,7 +98,7 @@ export default function Tombol({
         ) : ikon ? (
           <Ionicons name={ikon} size={20} color={teks} />
         ) : null}
-        <Text style={[styles.label, { color: teks }]} numberOfLines={1}>
+        <Text style={[styles.label, besar && styles.labelBesar, { color: teks }]} numberOfLines={1}>
           {label}
         </Text>
       </Animated.View>
@@ -122,4 +129,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   label: { fontFamily: font.tebal, fontSize: 16 },
+  // Ukuran besar (tombol operasi simulasi): tinggi 56, radius 18, teks 17 ExtraBold
+  wadahBesar: { height: TINGGI_BESAR + TURUN },
+  bentukBesar: { height: TINGGI_BESAR, borderRadius: 18 },
+  labelBesar: { fontFamily: font.judul, fontSize: 17 },
 });

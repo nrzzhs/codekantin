@@ -1,12 +1,21 @@
-import { useCallback, useMemo, useState } from 'react';
-import {
-  View, Text, TouchableOpacity, Image, ScrollView, RefreshControl, StyleSheet,
-} from 'react-native';
+import { useCallback, useEffect, useMemo, useState, type ComponentProps } from 'react';
+import { View, Text, Pressable, Image, ScrollView, RefreshControl, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import Animated, {
+  FadeInDown,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import KartuModul from '../components/KartuModul';
-import { warna } from '../lib/tema';
-import { DAFTAR_MODUL, FAKTA, hitungLencana, ringkasanModul } from '../data/beranda';
+import Kartu from '../components/ui/Kartu';
+import TekanSkala from '../components/ui/TekanSkala';
+import Tombol from '../components/ui/Tombol';
+import { font, warna } from '../lib/tema';
+import { DAFTAR_MODUL, FAKTA, hitungLencana, ringkasanModul, type RuteModul } from '../data/beranda';
 import { useAntrean, useTumpukan, useTebak } from '../context/SimulatorContext';
 
 type Props = {
@@ -16,6 +25,81 @@ type Props = {
   xp: number;
   onRefresh: () => Promise<void>;
 };
+
+type NamaIkon = ComponentProps<typeof Ionicons>['name'];
+
+// Warna banner gelap
+const TOSKA = '#5EEAD4';
+const PANEL = '#1E293B';
+const TRACK = '#334155';
+const TEKS_BANNER = '#CBD5E1';
+const TEKS_BANNER_REDUP = '#94A3B8';
+
+// Warna per modul: biru = Queue, oranye = Stack, ungu = Mode Tebak.
+// Data modul (teks & warna lama) tetap di data/beranda.ts; di sini hanya tampilannya.
+const GAYA_MODUL: Record<
+  RuteModul,
+  {
+    ikon: NamaIkon;
+    latar: string;
+    teksTag: string;
+    warnaIkon: string;
+    varian: 'antrean' | 'tumpukan' | 'tebak';
+    warnaKanan: string;
+    jenisPreview?: 'antrean' | 'tumpukan';
+  }
+> = {
+  Antrean: {
+    ikon: 'people-outline',
+    latar: warna.biruMuda,
+    teksTag: warna.biru,
+    warnaIkon: warna.biru,
+    varian: 'antrean',
+    warnaKanan: warna.biru,
+    jenisPreview: 'antrean',
+  },
+  Tumpukan: {
+    ikon: 'layers-outline',
+    latar: warna.oranyeMuda,
+    teksTag: warna.persikTeks,
+    warnaIkon: warna.oranye,
+    varian: 'tumpukan',
+    warnaKanan: warna.persikTeks,
+    jenisPreview: 'tumpukan',
+  },
+  Tebak: {
+    ikon: 'locate-outline',
+    latar: warna.unguMuda,
+    teksTag: warna.ungu,
+    warnaIkon: warna.ungu,
+    varian: 'tebak',
+    warnaKanan: warna.ungu,
+  },
+};
+
+// Ambang sama dengan LENCANA di data/beranda.ts (tidak diekspor, jadi disalin di sini).
+// hitungLencana() hanya memberi teks & progres; nama, level, dan sisa XP dihitung di sini.
+const TAHAP_LENCANA = [
+  { xp: 0, nama: 'Koki Magang', pendek: 'Magang' },
+  { xp: 100, nama: 'Koki Muda', pendek: 'Muda' },
+  { xp: 300, nama: 'Koki Handal', pendek: 'Handal' },
+  { xp: 600, nama: 'Master Koki LIFO/FIFO', pendek: 'Master' },
+];
+
+function infoLencana(xp: number) {
+  let indeks = 0;
+  TAHAP_LENCANA.forEach((t, i) => {
+    if (xp >= t.xp) indeks = i;
+  });
+  const berikutnya = TAHAP_LENCANA[indeks + 1];
+  return {
+    indeks,
+    nama: TAHAP_LENCANA[indeks].nama,
+    level: indeks + 1,
+    berikutnya: berikutnya?.nama ?? null,
+    sisa: berikutnya ? berikutnya.xp - xp : 0,
+  };
+}
 
 function faktaAcak(kecuali?: number) {
   let i = Math.floor(Math.random() * FAKTA.length);
@@ -38,8 +122,10 @@ export default function BerandaScreen({ nickname, avatarUrl, points, xp, onRefre
   const [refreshing, setRefreshing] = useState(false);
   const [indeksFakta, setIndeksFakta] = useState(() => faktaAcak());
   const [fotoError, setFotoError] = useState(false);
+  const kurangiGerak = useReducedMotion();
 
   const lencana = useMemo(() => hitungLencana(xp), [xp]);
+  const lv = useMemo(() => infoLencana(xp), [xp]);
 
   const muatUlang = useCallback(async () => {
     setRefreshing(true);
@@ -48,15 +134,54 @@ export default function BerandaScreen({ nickname, avatarUrl, points, xp, onRefre
     setRefreshing(false);
   }, [onRefresh]);
 
+  // Progress bar terisi dari 0 saat layar dibuka, lalu mengikuti perubahan XP
+  const progres = useSharedValue(0);
+  useEffect(() => {
+    progres.set(kurangiGerak ? lencana.progres : withTiming(lencana.progres, { duration: 900 }));
+  }, [lencana.progres, kurangiGerak, progres]);
+  const gayaProgres = useAnimatedStyle(() => ({ width: `${progres.get() * 100}%` }));
+
+  // Fakta baru: muncul pelan sambil bergeser 6 px ke atas
+  const faktaOpasitas = useSharedValue(1);
+  const faktaGeser = useSharedValue(0);
+  useEffect(() => {
+    if (kurangiGerak) return;
+    faktaOpasitas.set(0);
+    faktaGeser.set(6);
+    faktaOpasitas.set(withTiming(1, { duration: 300 }));
+    faktaGeser.set(withTiming(0, { duration: 300 }));
+  }, [indeksFakta, kurangiGerak, faktaOpasitas, faktaGeser]);
+  const gayaFakta = useAnimatedStyle(() => ({
+    opacity: faktaOpasitas.get(),
+    transform: [{ translateY: faktaGeser.get() }],
+  }));
+
+  // Animasi masuk berurutan, jeda 60 ms per elemen
+  const masuk = (urutan: number) =>
+    kurangiGerak ? undefined : FadeInDown.delay(urutan * 60).duration(350);
+
+  const fakta = FAKTA[indeksFakta];
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.isi}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={muatUlang} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={muatUlang}
+            colors={[warna.biru]}
+            tintColor={warna.biru}
+          />
+        }
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.navigate('Profil')} style={styles.avatarWrap}>
+        {/* 1. Header */}
+        <Animated.View entering={masuk(0)} style={styles.header}>
+          <Pressable
+            onPress={() => navigation.navigate('Profil')}
+            accessibilityRole="button"
+            accessibilityLabel="Buka Profil"
+          >
             {avatarUrl && !fotoError ? (
               <Image source={{ uri: avatarUrl }} style={styles.avatar} onError={() => setFotoError(true)} />
             ) : (
@@ -64,172 +189,357 @@ export default function BerandaScreen({ nickname, avatarUrl, points, xp, onRefre
                 <Text style={styles.inisial}>{nickname.charAt(0).toUpperCase()}</Text>
               </View>
             )}
-          </TouchableOpacity>
+          </Pressable>
 
           <View style={styles.headerTeks}>
             <Text style={styles.merek}>CODE KANTIN</Text>
-            <Text style={styles.sapaan} numberOfLines={1}>Halo, {nickname}! 👋</Text>
+            <Text style={styles.sapaan} numberOfLines={1} accessibilityRole="header">
+              Halo, {nickname}!
+            </Text>
           </View>
 
-          <View style={styles.pil}>
-            <Text style={styles.pilTeks}>⭐ {points} Poin</Text>
+          <View style={styles.pilPoin} accessible accessibilityLabel={`${points} Poin`}>
+            <Ionicons name="star" size={18} color={warna.oranye} />
+            <Text style={styles.pilPoinTeks}>{points} Poin</Text>
           </View>
-        </View>
+        </Animated.View>
 
-        {/* Banner */}
-        <View style={styles.banner}>
-          <View style={styles.bannerAtas}>
-            <View style={styles.bannerTag}>
-              <Text style={styles.bannerTagTeks}>KONSEP DASAR CS</Text>
-            </View>
-            <Text style={styles.bannerLencana} numberOfLines={1}>{lencana.teks}</Text>
+        {/* 2. Banner */}
+        <Animated.View entering={masuk(1)} style={styles.banner}>
+          <View style={styles.chipBanner}>
+            <Text style={styles.chipBannerTeks}>KONSEP DASAR CS</Text>
           </View>
           <Text style={styles.bannerJudul}>
             Pahami logika antrean (Queue) & tumpukan (Stack) lewat simulasi dapur nyata!
           </Text>
-          <View style={styles.progresLatar}>
-            <View style={[styles.progresIsi, { width: `${Math.round(lencana.progres * 100)}%` }]} />
-          </View>
-          <Text style={styles.progresTeks}>{xp} XP terkumpul</Text>
-        </View>
+          <View style={styles.garis} />
 
-        {/* Modul */}
-        <Text style={styles.bagian}>Modul Pembelajaran</Text>
-        <Text style={styles.bagianSub}>Pilih konsep untuk mulai simulasi interaktif</Text>
-
-        {DAFTAR_MODUL.map((m) => {
-          const r = ringkasanModul(m.id, isiAntrean, isiTumpukan, infoTebak);
-          return (
-            <KartuModul
-              key={m.id}
-              tag={m.tag}
-              tagBg={m.tagBg}
-              tagTeks={m.tagTeks}
-              judul={m.judul}
-              deskripsi={m.deskripsi}
-              previewKiri={r.kiri}
-              previewKanan={r.kanan}
-              tombol={m.tombol}
-              warnaTombol={m.warnaTombol}
-              onPress={() => navigation.navigate(m.id)}
-            />
-          );
-        })}
-
-        {/* Bandingkan */}
-        <View style={styles.kartu}>
-          <View style={styles.barisAtas}>
-            <View style={[styles.tagKecil, { backgroundColor: warna.hijauMuda }]}>
-              <Text style={[styles.tagKecilTeks, { color: '#0F766E' }]}>KOMPARASI LOGIKA</Text>
-            </View>
-            <Text style={styles.layarPenuh}>Layar Penuh</Text>
-          </View>
-          <Text style={styles.judulKartu}>Bandingkan Stack vs Queue</Text>
-          <Text style={styles.deskripsiKartu}>
-            Lihat perbedaan alur data secara berdampingan dalam satu kanvas dapur simultan!
-          </Text>
-
-          <View style={styles.duaKolom}>
-            <View style={[styles.mini, { backgroundColor: warna.biruMuda, borderColor: '#BAE6FD' }]}>
-              <Text style={[styles.miniJudul, { color: warna.biru }]}>QUEUE</Text>
-              <Text style={styles.miniOp}>Enqueue • Dequeue</Text>
-              <View style={[styles.miniPil, { backgroundColor: '#BAE6FD' }]}>
-                <Text style={styles.miniPilTeks}>↔️ Depan & Belakang</Text>
-              </View>
-              <Text style={styles.miniJumlah}>{isiAntrean.length} elemen</Text>
-            </View>
-            <View style={[styles.mini, { backgroundColor: warna.oranyeMuda, borderColor: '#FED7AA' }]}>
-              <Text style={[styles.miniJudul, { color: '#C2410C' }]}>STACK</Text>
-              <Text style={styles.miniOp}>Push • Pop</Text>
-              <View style={[styles.miniPil, { backgroundColor: '#FED7AA' }]}>
-                <Text style={styles.miniPilTeks}>⬆️ Puncak Saja (TOP)</Text>
-              </View>
-              <Text style={styles.miniJumlah}>{isiTumpukan.length} elemen</Text>
-            </View>
-          </View>
-
-          <TouchableOpacity
-            style={styles.tombolGaris}
-            onPress={() => navigation.navigate('Bandingkan')}
-            activeOpacity={0.85}
+          <View
+            style={styles.barisLencana}
+            accessible
+            accessibilityLabel={`Lencana kamu: ${lv.nama}, level ${lv.level}`}
           >
-            <Text style={styles.tombolGarisTeks}>Buka Mode Bandingkan</Text>
-          </TouchableOpacity>
+            <View style={styles.kotakLencana}>
+              <Ionicons name="ribbon-outline" size={30} color={TOSKA} />
+            </View>
+            <View style={styles.kolomLencana}>
+              <Text style={styles.lencanaLabel}>Lencana kamu</Text>
+              <Text style={styles.lencanaNama} numberOfLines={2}>
+                {lv.nama}
+              </Text>
+            </View>
+            <View style={styles.chipLv}>
+              <Text style={styles.chipLvTeks}>Lv {lv.level}</Text>
+            </View>
+          </View>
+
+          <View style={styles.barisXp}>
+            <Text style={styles.xp}>{xp} XP</Text>
+            <Text style={styles.xpSisa}>
+              {lv.berikutnya ? `${lv.sisa} XP lagi → ${lv.berikutnya}` : 'Level tertinggi!'}
+            </Text>
+          </View>
+          <View
+            style={styles.track}
+            accessibilityRole="progressbar"
+            accessibilityLabel={lv.berikutnya ? `Kemajuan menuju ${lv.berikutnya}` : 'Level tertinggi'}
+            accessibilityValue={{ min: 0, max: 100, now: Math.round(lencana.progres * 100) }}
+          >
+            <Animated.View style={[styles.trackIsi, gayaProgres]} />
+          </View>
+
+          <View style={styles.tahap} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
+            {TAHAP_LENCANA.map((t, i) => {
+              const capai = i <= lv.indeks;
+              return (
+                <View key={t.pendek} style={styles.kolomTahap}>
+                  <View style={[styles.garisTahap, { backgroundColor: capai ? TOSKA : TRACK }]} />
+                  <Text style={[styles.teksTahap, { color: capai ? TOSKA : TEKS_BANNER_REDUP }]}>
+                    {t.pendek}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        </Animated.View>
+
+        {/* 3–4. Modul */}
+        <View style={styles.bagianModul}>
+          <Animated.View entering={masuk(2)}>
+            <Text style={styles.bagian} accessibilityRole="header">
+              Modul Pembelajaran
+            </Text>
+            <Text style={styles.bagianSub}>Pilih konsep untuk mulai simulasi interaktif</Text>
+          </Animated.View>
+
+          {DAFTAR_MODUL.map((m, i) => {
+            const r = ringkasanModul(m.id, isiAntrean, isiTumpukan, infoTebak);
+            const g = GAYA_MODUL[m.id];
+            const isi = m.id === 'Antrean' ? isiAntrean.length : m.id === 'Tumpukan' ? isiTumpukan.length : 0;
+            return (
+              <Animated.View key={m.id} entering={masuk(3 + i)}>
+                <KartuModul
+                  tag={m.tag}
+                  tagBg={g.latar}
+                  tagTeks={g.teksTag}
+                  judul={m.judul}
+                  deskripsi={m.deskripsi}
+                  previewKiri={r.kiri}
+                  previewKanan={r.kanan}
+                  tombol={m.tombol}
+                  warnaTombol={m.warnaTombol}
+                  onPress={() => navigation.navigate(m.id)}
+                  ikon={g.ikon}
+                  ikonBg={g.latar}
+                  ikonWarna={g.warnaIkon}
+                  varianTombol={g.varian}
+                  jenisPreview={g.jenisPreview}
+                  isiPreview={isi}
+                  warnaPreviewKanan={g.warnaKanan}
+                />
+              </Animated.View>
+            );
+          })}
         </View>
 
-        {/* Tahukah Kamu */}
-        <TouchableOpacity
-          style={styles.fakta}
-          activeOpacity={0.85}
-          onPress={() => setIndeksFakta((i) => faktaAcak(i))}
-        >
-          <Text style={styles.faktaJudul}>💡 Tahukah Kamu?</Text>
-          <Text style={styles.faktaIsi}>{FAKTA[indeksFakta]}</Text>
-          <Text style={styles.faktaHint}>Ketuk untuk fakta lain</Text>
-        </TouchableOpacity>
+        {/* 5. Bandingkan */}
+        <Animated.View entering={masuk(3 + DAFTAR_MODUL.length)}>
+          <TekanSkala onPress={() => navigation.navigate('Bandingkan')} accessible={false}>
+            <Kartu style={styles.kartuBandingkan}>
+              <View style={styles.barisAtas}>
+                <View style={[styles.chip, { backgroundColor: warna.hijauMuda }]}>
+                  <Text style={[styles.chipTeks, { color: warna.hijauTua }]}>KOMPARASI LOGIKA</Text>
+                </View>
+                <View style={styles.layarPenuh}>
+                  <Ionicons name="expand-outline" size={14} color={warna.teksRedup} />
+                  <Text style={styles.layarPenuhTeks}>Layar Penuh</Text>
+                </View>
+              </View>
+              <Text style={styles.judulKartu} accessibilityRole="header">
+                Bandingkan Stack vs Queue
+              </Text>
+              <Text style={styles.deskripsiKartu}>
+                Lihat perbedaan alur data secara berdampingan dalam satu kanvas dapur simultan!
+              </Text>
+
+              <View style={styles.duaPanel}>
+                <Panel
+                  latar={warna.biruMuda}
+                  warnaTeks={warna.biru}
+                  ikon="people-outline"
+                  judul="QUEUE"
+                  operasi="enqueue · dequeue"
+                  ikonPil="swap-horizontal"
+                  teksPil="Depan & Belakang"
+                  jumlah={isiAntrean.length}
+                />
+                <Panel
+                  latar={warna.oranyeMuda}
+                  warnaTeks={warna.persikTeks}
+                  ikon="layers-outline"
+                  judul="STACK"
+                  operasi="push · pop"
+                  ikonPil="arrow-up"
+                  teksPil="Puncak Saja (TOP)"
+                  jumlah={isiTumpukan.length}
+                />
+              </View>
+
+              <Tombol
+                label="Buka Mode Bandingkan"
+                varian="sekunder"
+                ikon="swap-vertical"
+                onPress={() => navigation.navigate('Bandingkan')}
+              />
+            </Kartu>
+          </TekanSkala>
+        </Animated.View>
+
+        {/* 6. Tahukah Kamu? */}
+        <Animated.View entering={masuk(4 + DAFTAR_MODUL.length)}>
+          <TekanSkala
+            style={styles.fakta}
+            onPress={() => setIndeksFakta((i) => faktaAcak(i))}
+            accessibilityRole="button"
+            accessibilityLabel={`Tahukah Kamu? ${fakta}. Ketuk untuk fakta lain.`}
+          >
+            <View style={styles.faktaAtas}>
+              <View style={styles.kotakBohlam}>
+                <Ionicons name="bulb-outline" size={20} color={warna.oranye} />
+              </View>
+              <Text style={styles.faktaJudul}>Tahukah Kamu?</Text>
+              <Text style={styles.faktaNomor}>
+                {indeksFakta + 1}/{FAKTA.length}
+              </Text>
+            </View>
+            <Animated.Text style={[styles.faktaIsi, gayaFakta]}>{fakta}</Animated.Text>
+            <View style={styles.faktaBawah}>
+              <Ionicons name="refresh" size={16} color={warna.persikTeks} />
+              <Text style={styles.faktaPetunjuk}>Ketuk untuk fakta lain</Text>
+            </View>
+          </TekanSkala>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+type PanelProps = {
+  latar: string;
+  warnaTeks: string;
+  ikon: NamaIkon;
+  judul: string;
+  operasi: string;
+  ikonPil: NamaIkon;
+  teksPil: string;
+  jumlah: number;
+};
+
+function Panel({ latar, warnaTeks, ikon, judul, operasi, ikonPil, teksPil, jumlah }: PanelProps) {
+  return (
+    <View
+      style={[styles.panel, { backgroundColor: latar }]}
+      accessible
+      accessibilityLabel={`${judul}: ${operasi}, ${teksPil}, ${jumlah} elemen`}
+    >
+      <View style={styles.panelJudulBaris}>
+        <Ionicons name={ikon} size={18} color={warnaTeks} />
+        <Text style={[styles.panelJudul, { color: warnaTeks }]}>{judul}</Text>
+      </View>
+      <Text style={[styles.panelOperasi, { color: warnaTeks }]}>{operasi}</Text>
+      <View style={styles.panelPil}>
+        <Ionicons name={ikonPil} size={12} color={warnaTeks} />
+        <Text style={[styles.panelPilTeks, { color: warnaTeks }]} numberOfLines={1}>
+          {teksPil}
+        </Text>
+      </View>
+      <Text style={[styles.panelJumlah, { color: warnaTeks }]}>{jumlah} elemen</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: warna.latar },
-  isi: { padding: 18, paddingBottom: 32 },
+  isi: { padding: 20, paddingBottom: 32, gap: 24 },
 
-  header: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  avatarWrap: { marginRight: 12 },
-  avatar: { width: 46, height: 46, borderRadius: 23 },
+  // Header
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  avatar: { width: 52, height: 52, borderRadius: 26 },
   avatarKosong: { backgroundColor: warna.biru, alignItems: 'center', justifyContent: 'center' },
-  inisial: { color: '#fff', fontSize: 20, fontWeight: '800' },
+  inisial: { fontFamily: font.judul, fontSize: 22, color: '#FFFFFF' },
   headerTeks: { flex: 1 },
-  merek: { fontSize: 12, fontWeight: '800', color: '#B45309', letterSpacing: 1 },
-  sapaan: { fontSize: 24, fontWeight: '800', color: warna.teks },
-  pil: { backgroundColor: warna.persik, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, marginLeft: 8 },
-  pilTeks: { fontWeight: '700', color: warna.persikTeks, fontSize: 13 },
-
-  banner: { backgroundColor: warna.gelap, borderRadius: 20, padding: 18, marginBottom: 22 },
-  bannerAtas: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  bannerTag: { backgroundColor: 'rgba(94,234,212,0.18)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
-  bannerTagTeks: { color: '#5EEAD4', fontWeight: '700', fontSize: 11, letterSpacing: 0.5 },
-  bannerLencana: { color: '#94A3B8', fontSize: 11, flex: 1, textAlign: 'right', marginLeft: 8 },
-  bannerJudul: { color: '#fff', fontSize: 19, fontWeight: '800', lineHeight: 26, marginTop: 14 },
-  progresLatar: { height: 6, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 3, marginTop: 16, overflow: 'hidden' },
-  progresIsi: { height: 6, backgroundColor: '#5EEAD4', borderRadius: 3 },
-  progresTeks: { color: '#94A3B8', fontSize: 11, marginTop: 6 },
-
-  bagian: { fontSize: 22, fontWeight: '800', color: warna.teks },
-  bagianSub: { color: warna.teksRedup, marginTop: 2, marginBottom: 14, fontSize: 13 },
-
-  kartu: {
-    backgroundColor: warna.kartu, borderRadius: 20, borderWidth: 1,
-    borderColor: warna.garis, padding: 18, marginBottom: 14,
+  merek: { fontFamily: font.judul, fontSize: 11, letterSpacing: 1.5, color: warna.persikTeks },
+  sapaan: { fontFamily: font.judul, fontSize: 20, color: warna.teks },
+  pilPoin: {
+    height: 36,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: warna.oranyeMuda,
   },
+  pilPoinTeks: { fontFamily: font.judul, fontSize: 14, color: warna.persikTeks },
+
+  // Banner
+  banner: {
+    backgroundColor: warna.gelap,
+    borderRadius: 24,
+    padding: 20,
+    gap: 16,
+    shadowColor: warna.gelap,
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 8,
+  },
+  chipBanner: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(94,234,212,0.12)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  chipBannerTeks: { fontFamily: font.judul, fontSize: 11, letterSpacing: 0.5, color: TOSKA },
+  bannerJudul: { fontFamily: font.judul, fontSize: 17, lineHeight: 23, color: '#FFFFFF' },
+  garis: { height: 1, backgroundColor: PANEL },
+  barisLencana: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  kotakLencana: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: PANEL,
+    borderWidth: 2,
+    borderColor: TOSKA,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  kolomLencana: { flex: 1 },
+  lencanaLabel: { fontFamily: font.semi, fontSize: 12, color: TEKS_BANNER },
+  lencanaNama: { fontFamily: font.judul, fontSize: 20, color: '#FFFFFF' },
+  chipLv: {
+    backgroundColor: 'rgba(94,234,212,0.12)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  chipLvTeks: { fontFamily: font.judul, fontSize: 11, color: TOSKA },
+  barisXp: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 },
+  xp: { fontFamily: font.judul, fontSize: 15, color: '#FFFFFF' },
+  xpSisa: { flexShrink: 1, textAlign: 'right', fontFamily: font.semi, fontSize: 13, color: TEKS_BANNER },
+  track: { height: 12, borderRadius: 999, backgroundColor: TRACK, overflow: 'hidden', marginTop: -6 },
+  trackIsi: { height: '100%', borderRadius: 999, backgroundColor: TOSKA },
+  tahap: { flexDirection: 'row', gap: 6 },
+  kolomTahap: { flex: 1, gap: 6 },
+  garisTahap: { height: 4, borderRadius: 999 },
+  teksTahap: { fontFamily: font.tebal, fontSize: 10, textAlign: 'center' },
+
+  // Modul
+  bagianModul: { gap: 16 },
+  bagian: { fontFamily: font.judul, fontSize: 22, color: warna.teks },
+  bagianSub: { fontFamily: font.isi, fontSize: 14, color: warna.teksRedup, marginTop: 2 },
+
+  // Bandingkan
+  kartuBandingkan: { gap: 12 },
   barisAtas: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  tagKecil: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
-  tagKecilTeks: { fontSize: 12, fontWeight: '700' },
-  layarPenuh: { color: warna.teksRedup, fontSize: 12 },
-  judulKartu: { fontSize: 22, fontWeight: '800', color: warna.teks, marginTop: 14 },
-  deskripsiKartu: { color: warna.teksRedup, marginTop: 6, lineHeight: 20 },
-
-  duaKolom: { flexDirection: 'row', gap: 10, marginTop: 14 },
-  mini: { flex: 1, borderRadius: 14, borderWidth: 1, padding: 12, alignItems: 'center' },
-  miniJudul: { fontWeight: '800', fontSize: 13 },
-  miniOp: { color: warna.teksRedup, fontSize: 12, marginTop: 4 },
-  miniPil: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, marginTop: 8 },
-  miniPilTeks: { fontSize: 11, fontWeight: '600', color: warna.teks },
-  miniJumlah: { color: warna.teksRedup, fontSize: 11, marginTop: 8 },
-
-  tombolGaris: {
-    borderRadius: 14, borderWidth: 1, borderColor: warna.garis,
-    paddingVertical: 16, alignItems: 'center', marginTop: 12, backgroundColor: '#fff',
+  chip: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  chipTeks: { fontFamily: font.judul, fontSize: 11 },
+  layarPenuh: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  layarPenuhTeks: { fontFamily: font.semi, fontSize: 12, color: warna.teksRedup },
+  judulKartu: { fontFamily: font.judul, fontSize: 18, color: warna.teks },
+  deskripsiKartu: { fontFamily: font.isi, fontSize: 14, lineHeight: 21, color: warna.teksRedup },
+  duaPanel: { flexDirection: 'row', gap: 10 },
+  panel: { flex: 1, borderRadius: 14, padding: 12, gap: 8, alignItems: 'flex-start' },
+  panelJudulBaris: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  panelJudul: { fontFamily: font.judul, fontSize: 13 },
+  panelOperasi: { fontFamily: font.kode, fontSize: 11 },
+  panelPil: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    maxWidth: '100%',
   },
-  tombolGarisTeks: { fontWeight: '700', fontSize: 16, color: warna.teks },
+  panelPilTeks: { fontFamily: font.tebal, fontSize: 11, flexShrink: 1 },
+  panelJumlah: { fontFamily: font.semi, fontSize: 12 },
 
-  fakta: {
-    backgroundColor: warna.kotakKode, borderRadius: 20, borderWidth: 1,
-    borderColor: '#F5C9B5', padding: 18,
+  // Tahukah Kamu?
+  fakta: { backgroundColor: warna.persik, borderRadius: 20, padding: 16, gap: 10 },
+  faktaAtas: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  kotakBohlam: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  faktaJudul: { fontWeight: '800', color: '#7C2D12', fontSize: 16, marginBottom: 8 },
-  faktaIsi: { color: '#7C2D12', fontWeight: '600', lineHeight: 21 },
-  faktaHint: { color: '#B45309', fontSize: 11, marginTop: 10 },
+  faktaJudul: { flex: 1, fontFamily: font.judul, fontSize: 15, color: warna.persikTeks },
+  faktaNomor: { fontFamily: font.tebal, fontSize: 12, color: warna.persikTeks },
+  faktaIsi: { fontFamily: font.isi, fontSize: 15, lineHeight: 23, color: warna.teks },
+  faktaBawah: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  faktaPetunjuk: { fontFamily: font.tebal, fontSize: 13, color: warna.persikTeks },
 });

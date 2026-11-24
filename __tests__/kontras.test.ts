@@ -33,6 +33,18 @@ const PASANGAN: [string, string, string][] = [
   ['teks tombol nonaktif', warna.teksRedup, warna.garis],
   ['putih di tombol utama hijau', PUTIH, warna.hijau],
   ['teks syarat terpenuhi di kartu putih', warna.hijauTeks, PUTIH],
+  // Tampilan tahap 3 (Beranda)
+  ['ungu Tebak di kotak preview', warna.ungu, warna.kotakKode],
+  ['ungu di tag & ikon Tebak', warna.ungu, warna.unguMuda],
+  ['putih di tombol Tebak', PUTIH, warna.ungu],
+  ['biru di tag Antrean & panel QUEUE', warna.biru, warna.biruMuda],
+  ['persik tua di tag Tumpukan, panel STACK & pil poin', warna.persikTeks, warna.oranyeMuda],
+  ['biru di kotak preview', warna.biru, warna.kotakKode],
+  ['persik tua di kotak preview', warna.persikTeks, warna.kotakKode],
+  ['teks abu terang di banner gelap', '#CBD5E1', warna.gelap],
+  ['tahap lencana belum tercapai di banner', '#94A3B8', warna.gelap],
+  ['toska di banner gelap', '#5EEAD4', warna.gelap],
+  ['putih di tombol Tumpukan', PUTIH, warna.oranye],
 ];
 
 describe('Kontras warna (WCAG AA, teks normal minimal 4,5:1)', () => {

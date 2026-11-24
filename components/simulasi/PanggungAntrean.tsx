@@ -101,24 +101,34 @@ function SlotPelanggan({ elemen, posisi, jumlah }: { elemen: string; posisi: num
   );
 }
 
+/**
+ * Gambar karakter pelanggan (statis). Warna kulit, baju, dan rambut berganti
+ * berdasarkan nomor pelanggan. Ukuran asli 44 × 64.
+ */
+export function GambarPelanggan({ nomor, lebar = 44 }: { nomor: number; lebar?: number }) {
+  const p = PALET[(Math.max(1, nomor) - 1) % PALET.length];
+  return (
+    <Svg width={lebar} height={(lebar * 64) / 44} viewBox="0 0 44 64">
+      <Path d="M6 64V48c0-9 7-15 16-15s16 6 16 15v16z" fill={p.baju} />
+      <Circle cx={22} cy={20} r={14} fill={p.kulit} />
+      <Path d="M9 16c2-9 24-11 26 0-6-4-20-4-26 0z" fill={p.rambut} />
+      <Circle cx={17} cy={21} r={2} fill="#1F1A17" />
+      <Circle cx={27} cy={21} r={2} fill="#1F1A17" />
+      <Ellipse cx={13} cy={26} rx={3} ry={2} fill="#FDBA8C" />
+      <Ellipse cx={31} cy={26} rx={3} ry={2} fill="#FDBA8C" />
+      <Path d="M18 27q4 3 8 0" fill="none" stroke="#1F1A17" strokeWidth={1.5} strokeLinecap="round" />
+    </Svg>
+  );
+}
+
 /** Karakter pelanggan 44 × 64 yang bergoyang naik-turun bergantian per slot. */
 function Pelanggan({ nomor, posisi }: { nomor: number; posisi: number }) {
-  const p = PALET[(Math.max(1, nomor) - 1) % PALET.length];
   const naik = useAyun(-3, 450, { jeda: posisi * 150 });
   const gaya = useAnimatedStyle(() => ({ transform: [{ translateY: naik.get() }] }));
 
   return (
     <Animated.View style={gaya} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <Svg width={44} height={64} viewBox="0 0 44 64">
-        <Path d="M6 64V48c0-9 7-15 16-15s16 6 16 15v16z" fill={p.baju} />
-        <Circle cx={22} cy={20} r={14} fill={p.kulit} />
-        <Path d="M9 16c2-9 24-11 26 0-6-4-20-4-26 0z" fill={p.rambut} />
-        <Circle cx={17} cy={21} r={2} fill="#1F1A17" />
-        <Circle cx={27} cy={21} r={2} fill="#1F1A17" />
-        <Ellipse cx={13} cy={26} rx={3} ry={2} fill="#FDBA8C" />
-        <Ellipse cx={31} cy={26} rx={3} ry={2} fill="#FDBA8C" />
-        <Path d="M18 27q4 3 8 0" fill="none" stroke="#1F1A17" strokeWidth={1.5} strokeLinecap="round" />
-      </Svg>
+      <GambarPelanggan nomor={nomor} />
     </Animated.View>
   );
 }

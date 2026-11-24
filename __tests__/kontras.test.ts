@@ -53,6 +53,12 @@ const PASANGAN: [string, string, string][] = [
   ['angka & null di panel inspeksi', '#F9A8D4', warna.gelap],
   ['biru di pil nama & ukuran panggung', warna.biru, PUTIH],
   ['putih di baris pseudocode galat', PUTIH, '#B91C1C'],
+  // Tampilan tahap 5 (Mode Tebak)
+  ['pilihan ganda yang dipilih', warna.ungu, '#F5F3FF'],
+  ['pil tingkat menantang', '#B91C1C', '#FEE2E2'],
+  ['judul "Benar sekali!" di lembar hijau', warna.hijau, '#F0FDF4'],
+  ['label HASIL TANTANGAN di kartu juara', warna.unguMuda, warna.ungu],
+  ['tombol Cek Jawaban nonaktif', warna.teksRedup, warna.unguMuda],
 ];
 
 describe('Kontras warna (WCAG AA, teks normal minimal 4,5:1)', () => {

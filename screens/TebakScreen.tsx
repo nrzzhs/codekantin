@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
+import { View, Text, ScrollView, StyleSheet, AccessibilityInfo } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Haptics from 'expo-haptics';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { supabase } from '../lib/supabase';
-import { warna, fontKode } from '../lib/tema';
+import { font, warna } from '../lib/tema';
 import { useTebak, useRiwayatTebak } from '../context/SimulatorContext';
 import type { SesiTebak, HasilSoal } from '../context/SimulatorContext';
 import { cariSoal as cariSoalBank, BANK_SOAL } from '../data/soal';
@@ -18,16 +20,42 @@ import {
   periksaPilihanGanda,
 } from '../logic/tebak';
 import {
+  BONUS_XP_SEMPURNA,
+  XP_PER_BENAR,
   hitungHadiah,
   ringkasRiwayat,
   tambahCatatan,
   tandaiTersinkron,
 } from '../logic/hadiah';
 import type { HasilRingkas } from '../logic/hadiah';
+import Kartu from '../components/ui/Kartu';
+import Tombol from '../components/ui/Tombol';
+import PanggungPembuka from '../components/tebak/PanggungPembuka';
+import KepalaSoal from '../components/tebak/KepalaSoal';
+import KartuAlur from '../components/tebak/KartuAlur';
+import SlotJawaban from '../components/tebak/SlotJawaban';
+import TokenPilihan from '../components/tebak/TokenPilihan';
+import PilihanGanda from '../components/tebak/PilihanGanda';
+import LembarUmpanBalik from '../components/tebak/LembarUmpanBalik';
+import {
+  KartuDiagnosis,
+  KartuJuara,
+  KartuTanpaMiskonsepsi,
+  KotakHadiah,
+} from '../components/tebak/HasilTebak';
 
-const URUTAN = ['Pertama', 'Kedua', 'Ketiga', 'Keempat', 'Kelima', 'Keenam'];
-const MERAH = '#DC2626';
-const MERAH_MUDA = '#FEE2E2';
+// Jumlah soal per sesi mengikuti susunan di logic/sesi.ts (tidak ditulis ulang di sini)
+const JUMLAH_SOAL = susunSesi(BANK_SOAL, []).idSoal.length;
+
+const ISI_TANTANGAN =
+  '5 soal: 3 simulasi urutan keluar dan 2 pilihan ganda. Tingkat naik bertahap: mudah, sedang, menantang. ' +
+  'Tiap jawaban benar +10 XP, semua benar bonus +20 XP. Poin hingga +20, sesuai jumlah jawaban benar.';
+
+const TINGKAT = [
+  { teks: 'mudah', latar: '#CCFBF1', warna: '#166534' },
+  { teks: 'sedang', latar: '#FFEDD5', warna: '#9A3412' },
+  { teks: 'menantang', latar: '#FEE2E2', warna: '#B91C1C' },
+];
 
 function buatDraft(soal: Soal | undefined): (string | null)[] {
   if (!soal) return [];
@@ -58,6 +86,7 @@ export default function TebakScreen({ onProfilBerubah }: Props) {
   const { nilai: sesi, setNilai: setSesi, siap } = useTebak();
   const { siap: bankSiap, muatUlang } = useBankSoal();
   const [memulai, setMemulai] = useState(false);
+  const [lihatRiwayat, setLihatRiwayat] = useState(false);
   // Soal guru dibaca dari salinan di sesi, supaya tidak berubah di tengah jalan
   const cariSoal = (id: string) => sesi?.soalSesi?.[id] ?? cariSoalBank(id);
   const { nilai: riwayatMentah, setNilai: setRiwayat, siap: riwayatSiap } = useRiwayatTebak();
@@ -198,6 +227,14 @@ export default function TebakScreen({ onProfilBerubah }: Props) {
       hasil = { idSoal: soal.id, jawaban: [id], benar: p.benar, miskonsepsi: p.miskonsepsi };
     }
     setSesi({ ...sesiAktif, hasil: [...sesiAktif.hasil, hasil], diperiksa: true });
+
+    // Umpan balik tampilan saja: getar dan pengumuman untuk pembaca layar
+    Haptics.notificationAsync(
+      hasil.benar ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning,
+    ).catch(() => {});
+    AccessibilityInfo.announceForAccessibility(
+      hasil.benar ? `Benar sekali! Tambah ${XP_PER_BENAR} XP.` : 'Belum tepat. Lihat penjelasan Koki.',
+    );
   }
 
   function berikutnya() {
@@ -210,23 +247,33 @@ export default function TebakScreen({ onProfilBerubah }: Props) {
 
   const ringkas = ringkasRiwayat(riwayat);
 
-  function renderRiwayat(judul: string) {
+  function renderRiwayat() {
     if (ringkas.sesi === 0) return null;
     return (
-      <View style={styles.kartu}>
-        <Text style={styles.judul}>{judul}</Text>
-        <Text style={styles.isiTeks}>
-          {ringkas.sesi} sesi · akurasi {ringkas.akurasi}% ({ringkas.benar}/{ringkas.total} soal benar)
-        </Text>
-        {ringkas.miskonsepsi.length > 0 && (
-          <>
-            <Text style={styles.petunjuk}>Miskonsepsi yang paling sering muncul:</Text>
-            {ringkas.miskonsepsi.slice(0, 3).map((m) => (
-              <Text key={m.jenis} style={styles.butir}>
-                • {namaMiskonsepsi(m.jenis)} ({m.jumlah}x)
-              </Text>
-            ))}
-          </>
+      <View style={styles.riwayat}>
+        <Tombol
+          label={lihatRiwayat ? 'Tutup Riwayat' : 'Lihat Riwayat'}
+          varian="sekunder"
+          ikon="time-outline"
+          onPress={() => setLihatRiwayat((v) => !v)}
+          accessibilityHint={lihatRiwayat ? undefined : 'Menampilkan ringkasan semua sesimu'}
+        />
+        {lihatRiwayat && (
+          <Kartu style={styles.kartuRiwayat}>
+            <Text style={styles.isiTeks}>
+              {ringkas.sesi} sesi · akurasi {ringkas.akurasi}% ({ringkas.benar}/{ringkas.total} soal benar)
+            </Text>
+            {ringkas.miskonsepsi.length > 0 && (
+              <>
+                <Text style={styles.petunjuk}>Miskonsepsi yang paling sering muncul:</Text>
+                {ringkas.miskonsepsi.slice(0, 3).map((m) => (
+                  <Text key={m.jenis} style={styles.butir}>
+                    • {namaMiskonsepsi(m.jenis)} ({m.jumlah}x)
+                  </Text>
+                ))}
+              </>
+            )}
+          </Kartu>
         )}
       </View>
     );
@@ -237,46 +284,72 @@ export default function TebakScreen({ onProfilBerubah }: Props) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScrollView contentContainerStyle={styles.isi}>
-          <View style={styles.banner}>
-            <Text style={styles.bannerTag}>MODE TEBAK</Text>
-            <Text style={styles.bannerJudul}>Prediksi dulu, baru lihat jawabannya</Text>
-            <Text style={styles.bannerSub}>
-              Baca alur perintah dapur, tebak urutan keluarnya, lalu cek jawabanmu. Setiap kesalahan
-              dijelaskan langkah demi langkah.
+          <PanggungPembuka />
+
+          <View style={styles.judulBlok}>
+            <Text style={styles.labelUngu}>MODE TEBAK</Text>
+            <Text style={styles.judulBesar} accessibilityRole="header">
+              Prediksi dulu, baru lihat jawabannya
             </Text>
           </View>
 
-          <View style={styles.kartu}>
-            <Text style={styles.judul}>Isi tantangan</Text>
-            <Text style={styles.butir}>• 5 soal: 3 simulasi urutan keluar dan 2 pilihan ganda</Text>
-            <Text style={styles.butir}>• Tingkat naik bertahap: mudah, sedang, menantang</Text>
-            <Text style={styles.butir}>• Tiap jawaban benar +10 XP, semua benar bonus +20 XP</Text>
-            <Text style={styles.butir}>• Poin hingga +20, sesuai jumlah jawaban benar</Text>
+          <View style={styles.infoBaris}>
+            <KotakInfo ikon="document-text-outline" warnaIkon={warna.ungu} angka={`${JUMLAH_SOAL}`} label="soal" />
+            <KotakInfo
+              ikon="checkmark-circle-outline"
+              warnaIkon={warna.hijau}
+              angka={`+${XP_PER_BENAR} XP`}
+              label="per benar"
+            />
+            <KotakInfo ikon="star" warnaIkon={warna.oranye} angka={`+${BONUS_XP_SEMPURNA}`} label="bonus" />
           </View>
 
-          {renderRiwayat('Riwayat belajarmu')}
+          <View
+            style={styles.tingkat}
+            accessible
+            accessibilityLabel="Tingkat soal naik bertahap: mudah, sedang, lalu menantang"
+          >
+            <Text style={styles.tingkatLabel}>Tingkat:</Text>
+            {TINGKAT.map((t, i) => (
+              <View key={t.teks} style={styles.tingkatItem}>
+                {i > 0 && <Ionicons name="chevron-forward" size={14} color={warna.teksRedup} />}
+                <View style={[styles.pilTingkat, { backgroundColor: t.latar }]}>
+                  <Text style={[styles.pilTingkatTeks, { color: t.warna }]}>{t.teks}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
 
           {jumlahTertunda > 0 && (
             <View style={styles.peringatan}>
-              <Text style={styles.peringatanIsi}>
-                {jumlahTertunda} hasil sesi belum tersimpan ke akunmu.
-                {mengirim ? ' Sedang dikirim...' : ''}
-              </Text>
-              {!mengirim && (
-                <TouchableOpacity style={styles.tombolKecil} onPress={kirimTertunda}>
-                  <Text style={styles.tombolKecilTeks}>Kirim sekarang</Text>
-                </TouchableOpacity>
-              )}
+              <Ionicons name="cloud-offline-outline" size={20} color="#C2410C" />
+              <View style={styles.kolom}>
+                <Text style={styles.peringatanIsi}>
+                  {jumlahTertunda} hasil sesi belum tersimpan ke akunmu.
+                  {mengirim ? ' Sedang dikirim...' : ''}
+                </Text>
+                {!mengirim && (
+                  <Text style={styles.tautan} onPress={kirimTertunda} accessibilityRole="button" suppressHighlighting>
+                    Kirim sekarang
+                  </Text>
+                )}
+              </View>
             </View>
           )}
 
-          <TouchableOpacity
-            style={[styles.tombolHijau, !siap && styles.mati]}
+          {renderRiwayat()}
+
+          <Tombol
+            label={siap && !memulai ? 'Mulai Tantangan' : 'Memuat...'}
+            varian="tebak"
+            ikon="play"
+            tinggi={60}
+            sudut={20}
             onPress={mulai}
-            disabled={!siap}
-          >
-            <Text style={styles.tombolHijauTeks}>{siap && !memulai ? 'Mulai Tantangan' : 'Memuat...'}</Text>
-          </TouchableOpacity>
+            nonaktif={!siap}
+            memuat={memulai}
+            accessibilityHint={ISI_TANTANGAN}
+          />
         </ScrollView>
       </SafeAreaView>
     );
@@ -288,107 +361,95 @@ export default function TebakScreen({ onProfilBerubah }: Props) {
   if (sesiAktif.indeks >= total) {
     const hasil = sesiAktif.hasil;
     const jumlahBenarSesi = hasil.filter((h) => h.benar).length;
-    const akurasi = Math.round((jumlahBenarSesi / total) * 100);
     const hadiah = hitungHadiah(jumlahBenarSesi, total);
     const catatan = riwayat.find((c) => c.sesiId === sesiAktif.sesiId);
     const jenisMiskonsepsi = Array.from(
       new Set(hasil.map((h) => h.miskonsepsi).filter((m): m is Miskonsepsi => m !== null)),
     );
-    const pesan =
-      akurasi >= 80
-        ? 'Koki Handal! Pemahamanmu sudah kuat. 🏆'
-        : akurasi >= 50
-        ? 'Lumayan! Tinggal diperkuat sedikit lagi. 👍'
-        : 'Terus berlatih, coba lagi dengan simulasi di tab Antrean dan Tumpukan. 💪';
 
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
         <ScrollView contentContainerStyle={styles.isi}>
-          <View style={styles.banner}>
-            <Text style={styles.bannerTag}>HASIL TANTANGAN</Text>
-            <Text style={styles.bannerJudul}>
-              {jumlahBenarSesi} dari {total} benar ({akurasi}%)
-            </Text>
-            <Text style={styles.bannerSub}>{pesan}</Text>
+          <KartuJuara benar={jumlahBenarSesi} total={total} />
+
+          <View style={styles.hadiahBaris}>
+            <KotakHadiah nilai={hadiah.xp} label="XP didapat" warnaAngka={warna.hijauTua} />
+            <KotakHadiah
+              nilai={hadiah.poin}
+              label="poin"
+              warnaAngka={warna.persikTeks}
+              ikon="star"
+              warnaIkon={warna.oranye}
+            />
           </View>
 
-          <View style={styles.kartu}>
-            <Text style={styles.judul}>Hadiah sesi ini</Text>
-            <View style={styles.hadiahBaris}>
-              <View style={styles.hadiahKotak}>
-                <Text style={styles.hadiahAngka}>⚡ +{hadiah.xp}</Text>
-                <Text style={styles.hadiahLabel}>XP</Text>
-              </View>
-              <View style={styles.hadiahKotak}>
-                <Text style={styles.hadiahAngka}>⭐ +{hadiah.poin}</Text>
-                <Text style={styles.hadiahLabel}>Poin</Text>
-              </View>
-            </View>
-
+          <View style={styles.status} accessibilityLiveRegion="polite">
             {catatan?.tersinkron ? (
-              <Text style={styles.statusOk}>✅ Sudah tersimpan ke akunmu.</Text>
+              <>
+                <Ionicons name="checkmark-circle" size={18} color={warna.hijau} />
+                <Text style={[styles.statusTeks, { color: warna.hijauTeks }]}>Sudah tersimpan ke akunmu.</Text>
+              </>
             ) : mengirim ? (
-              <Text style={styles.petunjuk}>Menyimpan ke akunmu...</Text>
+              <>
+                <Ionicons name="cloud-upload-outline" size={18} color={warna.teksRedup} />
+                <Text style={styles.statusTeks}>Menyimpan ke akunmu...</Text>
+              </>
             ) : (
               <>
-                <Text style={styles.statusGalat}>
-                  ⚠️ Belum tersimpan{galatKirim ? ` (${galatKirim})` : ''}. Hasilmu aman di HP dan
-                  akan dikirim ulang.
-                </Text>
-                <TouchableOpacity style={styles.tombolKecil} onPress={kirimTertunda}>
-                  <Text style={styles.tombolKecilTeks}>Coba simpan lagi</Text>
-                </TouchableOpacity>
+                <Ionicons name="cloud-offline-outline" size={18} color="#B91C1C" />
+                <View style={styles.kolom}>
+                  <Text style={[styles.statusTeks, { color: '#B91C1C' }]}>
+                    Belum tersimpan{galatKirim ? ` (${galatKirim})` : ''}. Hasilmu aman di HP dan akan dikirim
+                    ulang.
+                  </Text>
+                  <Text style={styles.tautan} onPress={kirimTertunda} accessibilityRole="button" suppressHighlighting>
+                    Coba simpan lagi
+                  </Text>
+                </View>
               </>
             )}
           </View>
 
-          <View style={styles.kartu}>
-            <Text style={styles.judul}>Rincian soal</Text>
-            {hasil.map((h, i) => {
-              const s = cariSoal(h.idSoal);
-              const nama =
-                s?.jenis === 'simulasi'
-                  ? `Simulasi ${s.struktur === 'stack' ? 'Stack' : 'Queue'} (${s.tingkat})`
-                  : s?.jenis === 'pilihan-ganda'
-                  ? `Pilihan ganda: ${s.pertanyaan}`
-                  : h.idSoal;
-              return (
-                <View key={`${h.idSoal}-${i}`} style={styles.barisHasil}>
-                  <Text style={styles.hasilIkon}>{h.benar ? '✅' : '❌'}</Text>
-                  <Text style={styles.hasilNama} numberOfLines={2}>{i + 1}. {nama}</Text>
-                </View>
-              );
-            })}
-          </View>
-
-          <View style={styles.kartu}>
-            <Text style={styles.judul}>Diagnosis sesi ini</Text>
+          <View style={styles.bagian}>
+            <Text style={styles.judulBagian} accessibilityRole="header">
+              Diagnosis sesi ini
+            </Text>
             {jenisMiskonsepsi.length === 0 ? (
-              <Text style={styles.isiTeks}>
-                {jumlahBenarSesi === total
-                  ? 'Tidak ada miskonsepsi terdeteksi. Mantap!'
-                  : 'Tidak ada pola miskonsepsi khusus yang terdeteksi. Coba telusuri langkah demi langkah dengan tabel jejak.'}
-              </Text>
+              <KartuTanpaMiskonsepsi
+                sempurna={jumlahBenarSesi === total}
+                teks={
+                  jumlahBenarSesi === total
+                    ? 'Tidak ada miskonsepsi terdeteksi. Mantap!'
+                    : 'Tidak ada pola miskonsepsi khusus yang terdeteksi. Coba telusuri langkah demi langkah dengan tabel jejak.'
+                }
+              />
             ) : (
               jenisMiskonsepsi.map((m) => {
                 const info = INFO_MISKONSEPSI[m];
                 const kali = hasil.filter((h) => h.miskonsepsi === m).length;
                 return (
-                  <View key={m} style={styles.peringatan}>
-                    <Text style={styles.peringatanJudul}>⚠️ {info.judul} ({kali}x)</Text>
-                    <Text style={styles.peringatanIsi}>{info.penjelasan}</Text>
-                    <Text style={styles.peringatanTips}>💡 {info.perbaikan}</Text>
-                  </View>
+                  <KartuDiagnosis
+                    key={m}
+                    judul={`${info.judul} (${kali}x)`}
+                    teks={`${info.penjelasan} ${info.perbaikan}`}
+                  />
                 );
               })
             )}
           </View>
 
-          {renderRiwayat('Riwayat semua sesi')}
+          {renderRiwayat()}
 
-          <TouchableOpacity style={styles.tombolHijau} onPress={mulai}>
-            <Text style={styles.tombolHijauTeks}>Main Lagi (soal baru)</Text>
-          </TouchableOpacity>
+          <Tombol
+            label="Main Lagi"
+            varian="tebak"
+            ikon="refresh"
+            tinggi={56}
+            sudut={20}
+            onPress={mulai}
+            memuat={memulai}
+            accessibilityHint="Mulai sesi baru dengan soal baru"
+          />
           <Text style={styles.sumber}>Soal disusun dari Modul Materi Stack dan Queue CodeKantin.</Text>
         </ScrollView>
       </SafeAreaView>
@@ -402,331 +463,246 @@ export default function TebakScreen({ onProfilBerubah }: Props) {
   const hasilIni = sesiAktif.diperiksa ? sesiAktif.hasil[sesiAktif.indeks] : undefined;
   const lengkap = sesiAktif.draft.length > 0 && sesiAktif.draft.every((x) => x !== null);
   const terakhir = sesiAktif.indeks === total - 1;
-  const progres = (sesiAktif.indeks + (sesiAktif.diperiksa ? 1 : 0)) / total;
 
-  const tag =
+  const chip =
     soal.jenis === 'pilihan-ganda'
-      ? 'PILIHAN GANDA'
+      ? { teks: 'PILIHAN GANDA', latar: warna.unguMuda, warna: warna.ungu }
       : soal.struktur === 'stack'
-      ? 'PREDIKSI • STACK (LIFO)'
-      : 'PREDIKSI • QUEUE (FIFO)';
-  const warnaTag =
-    soal.jenis === 'pilihan-ganda' ? '#7C3AED' : soal.struktur === 'stack' ? '#C2410C' : warna.biru;
+        ? { teks: 'PREDIKSI · STACK (LIFO)', latar: warna.oranyeMuda, warna: warna.persikTeks }
+        : { teks: 'PREDIKSI · QUEUE (FIFO)', latar: warna.biruMuda, warna: warna.biru };
 
   function renderSimulasi(s: SoalSimulasi, sesiIni: SesiTebak) {
     const kunci = hitungKunci(s);
     const opsi = pilihanJawaban(s);
+    const tunggal = sesiIni.draft.length === 1;
     return (
       <>
-        <View style={styles.kode}>
-          <Text style={styles.kodeJudul}>ALUR PERINTAH DAPUR</Text>
-          <Text style={styles.kodeKonteks}>{s.konteks}</Text>
-          {s.operasi.map((op, i) => {
-            const ambil = /^\s*(pop|dequeue)/i.test(op);
+        <KartuAlur struktur={s.struktur} konteks={s.konteks} operasi={s.operasi} />
+
+        <Text style={styles.pertanyaan} accessibilityRole="header">
+          {s.struktur === 'stack'
+            ? 'Piring mana yang keluar, dan dalam urutan apa?'
+            : 'Pelanggan mana yang dilayani, dan dalam urutan apa?'}
+        </Text>
+
+        <View style={styles.slot}>
+          {sesiIni.draft.map((isi, i) => {
+            const status = sesiIni.diperiksa ? (isi === kunci.keluar[i] ? 'benar' : 'salah') : null;
             return (
-              <View key={`${op}-${i}`} style={[styles.kodeBaris, ambil && styles.kodeAmbil]}>
-                <Text style={styles.kodeNo}>{i + 1}</Text>
-                <Text style={styles.kodeTeks}>{op}</Text>
-                {ambil && <Text style={styles.kodeTag}>KELUAR</Text>}
-              </View>
+              <SlotJawaban
+                key={`slot-${i}`}
+                struktur={s.struktur}
+                urutan={i}
+                isi={isi}
+                namaIsi={isi === null ? null : namaItem(s, isi)}
+                urutanPilihan={isi === null ? 0 : opsi.indexOf(isi)}
+                status={status}
+                tunggal={tunggal}
+                nonaktif={sesiIni.diperiksa}
+                onPress={() => kosongkanSlot(i)}
+              />
             );
           })}
         </View>
 
-        <View style={styles.kartu}>
-          <Text style={styles.pertanyaan}>
-            {s.struktur === 'stack'
-              ? 'Piring mana yang keluar, dan dalam urutan apa?'
-              : 'Pelanggan mana yang dilayani, dan dalam urutan apa?'}
-          </Text>
-
-          {sesiIni.draft.map((isi, i) => {
-            const status = sesiIni.diperiksa ? (isi === kunci.keluar[i] ? 'benar' : 'salah') : null;
-            return (
-              <TouchableOpacity
-                key={`slot-${i}`}
-                style={[
-                  styles.slot,
-                  status === 'benar' && styles.slotBenar,
-                  status === 'salah' && styles.slotSalah,
-                ]}
-                onPress={() => kosongkanSlot(i)}
-                disabled={sesiIni.diperiksa || isi === null}
-              >
-                <Text style={styles.slotLabel}>Keluar {URUTAN[i] ?? `ke-${i + 1}`}</Text>
-                <Text style={[styles.slotIsi, isi === null && styles.slotKosong]}>
-                  {isi === null ? 'ketuk pilihan di bawah' : namaItem(s, isi)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-
-          <Text style={styles.petunjuk}>Pilihan (ketuk slot yang terisi untuk membatalkan):</Text>
-          <View style={styles.chipBaris}>
-            {opsi.map((o) => {
-              const dipakai = sesiIni.draft.includes(o);
-              return (
-                <TouchableOpacity
-                  key={o}
-                  style={[styles.chip, (dipakai || sesiIni.diperiksa) && styles.mati]}
-                  onPress={() => isiSlot(o)}
-                  disabled={dipakai || sesiIni.diperiksa}
-                >
-                  <Text style={styles.chipTeks}>{namaItem(s, o)}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+        <Text style={styles.petunjuk}>Pilihan (ketuk slot yang terisi untuk membatalkan):</Text>
+        <View style={styles.token}>
+          {opsi.map((o, i) => (
+            <TokenPilihan
+              key={o}
+              struktur={s.struktur}
+              nilai={o}
+              urutan={i}
+              label={namaItem(s, o)}
+              dipakai={sesiIni.draft.includes(o)}
+              nonaktif={sesiIni.diperiksa}
+              onPress={() => isiSlot(o)}
+            />
+          ))}
         </View>
       </>
     );
   }
 
   function renderPilihanGanda(s: SoalPilihanGanda, sesiIni: SesiTebak) {
-    const dipilih = sesiIni.draft[0];
     return (
-      <View style={styles.kartu}>
-        <Text style={styles.pertanyaan}>{s.pertanyaan}</Text>
-        {s.pilihan.map((p, i) => {
-          const terpilih = dipilih === p.id;
-          const benar = sesiIni.diperiksa && p.id === s.benar;
-          const salah = sesiIni.diperiksa && terpilih && p.id !== s.benar;
-          return (
-            <TouchableOpacity
-              key={p.id}
-              style={[
-                styles.opsi,
-                terpilih && styles.opsiTerpilih,
-                benar && styles.slotBenar,
-                salah && styles.slotSalah,
-              ]}
-              onPress={() => pilihPG(p.id)}
-              disabled={sesiIni.diperiksa}
-            >
-              <Text style={styles.opsiHuruf}>{String.fromCharCode(65 + i)}</Text>
-              <Text style={styles.opsiTeks}>{p.teks}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <PilihanGanda soal={s} dipilih={sesiIni.draft[0] ?? null} diperiksa={sesiIni.diperiksa} onPilih={pilihPG} />
     );
   }
 
   function renderUmpanBalik(s: Soal, h: HasilSoal) {
     const info = h.miskonsepsi ? INFO_MISKONSEPSI[h.miskonsepsi] : null;
+    const labelTombol = terakhir ? 'Lihat Hasil' : `Soal Berikutnya (${sesiAktif!.indeks + 2}/${total})`;
 
-    let ringkasTeks = '';
-    let langkah: ReturnType<typeof hitungKunci>['langkah'] = [];
-    let akhir = '';
     if (s.jenis === 'simulasi') {
       const kunci = hitungKunci(s);
-      langkah = kunci.langkah;
-      ringkasTeks = `Urutan keluar yang benar: ${kunci.keluar.map((x) => namaItem(s, x)).join(' → ')}`;
-      akhir =
+      const ringkasTeks = `Urutan keluar yang benar: ${kunci.keluar.map((x) => namaItem(s, x)).join(' → ')}`;
+      const akhir =
         s.struktur === 'stack'
           ? `Isi akhir: [${kunci.isiAkhir.join(', ')}], TOP = ${kunci.top ?? 'kosong'}`
           : `Isi akhir: [${kunci.isiAkhir.join(', ')}], FRONT = ${kunci.front ?? 'kosong'}, REAR = ${kunci.rear ?? 'kosong'}`;
-    } else {
-      const benarTeks = s.pilihan.find((p) => p.id === s.benar)?.teks ?? '';
-      ringkasTeks = `Jawaban yang benar: ${benarTeks}`;
+      return (
+        <LembarUmpanBalik
+          key={sesiAktif!.indeks}
+          benar={h.benar}
+          ringkas={ringkasTeks}
+          xp={XP_PER_BENAR}
+          simulasi={{
+            struktur: s.struktur,
+            petunjuk: `Telusuri langkah demi langkah (${
+              s.struktur === 'stack' ? 'Stack, dasar → TOP' : 'Queue, FRONT → REAR'
+            }):`,
+            langkah: kunci.langkah,
+            akhir,
+          }}
+          kesalahan={info}
+          saranUmum="Coba telusuri ulang perintah satu per satu dan tulis isi struktur setelah setiap langkah."
+          labelTombol={labelTombol}
+          tombolNonaktif={terakhir && !riwayatSiap}
+          onLanjut={berikutnya}
+        />
+      );
     }
 
+    const benarTeks = s.pilihan.find((p) => p.id === s.benar)?.teks ?? '';
     return (
-      <>
-        <View style={[styles.hasilBanner, h.benar ? styles.hasilBenar : styles.hasilSalah]}>
-          <Text style={[styles.hasilJudul, { color: h.benar ? warna.hijauTeks : '#B91C1C' }]}>
-            {h.benar ? 'Benar sekali! 🎉' : 'Belum tepat 🤔'}
-          </Text>
-          <Text style={styles.hasilIsi}>{ringkasTeks}</Text>
-        </View>
-
-        <View style={styles.kartu}>
-          <Text style={styles.judul}>👨‍🍳 Penjelasan Koki</Text>
-          {s.jenis === 'pilihan-ganda' ? (
-            <Text style={styles.isiTeks}>{s.penjelasan}</Text>
-          ) : (
-            <>
-              <Text style={styles.petunjuk}>
-                Telusuri langkah demi langkah ({s.struktur === 'stack' ? 'Stack, dasar → TOP' : 'Queue, FRONT → REAR'}):
-              </Text>
-              {langkah.map((l, i) => (
-                <View key={`l-${i}`} style={styles.langkah}>
-                  <Text style={styles.langkahNo}>{i + 1}</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.langkahOp}>
-                      {l.perintah}
-                      {l.keluar !== null ? `  →  keluar ${namaItem(s, l.keluar)}` : ''}
-                    </Text>
-                    <Text style={styles.langkahIsi}>[{l.isi.join(', ')}]</Text>
-                  </View>
-                </View>
-              ))}
-              <Text style={styles.akhir}>{akhir}</Text>
-            </>
-          )}
-        </View>
-
-        {info && (
-          <View style={styles.peringatan}>
-            <Text style={styles.peringatanJudul}>⚠️ Hati-hati Kesalahan Umum: {info.judul}</Text>
-            <Text style={styles.peringatanIsi}>{info.penjelasan}</Text>
-            <Text style={styles.peringatanTips}>💡 {info.perbaikan}</Text>
-          </View>
-        )}
-        {!info && !h.benar && (
-          <View style={styles.peringatan}>
-            <Text style={styles.peringatanIsi}>
-              Coba telusuri ulang perintah satu per satu dan tulis isi struktur setelah setiap langkah.
-            </Text>
-          </View>
-        )}
-      </>
+      <LembarUmpanBalik
+        key={sesiAktif!.indeks}
+        benar={h.benar}
+        ringkas={`Jawaban yang benar: ${benarTeks}`}
+        xp={XP_PER_BENAR}
+        penjelasan={s.penjelasan}
+        kesalahan={info}
+        saranUmum="Coba telusuri ulang perintah satu per satu dan tulis isi struktur setelah setiap langkah."
+        labelTombol={labelTombol}
+        tombolNonaktif={terakhir && !riwayatSiap}
+        onLanjut={berikutnya}
+      />
     );
   }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView contentContainerStyle={styles.isi} keyboardShouldPersistTaps="handled">
-        <View style={styles.atas}>
-          <View style={[styles.tagPil, { backgroundColor: warnaTag }]}>
-            <Text style={styles.tagPilTeks}>{tag}</Text>
-          </View>
-            <Text style={styles.nomor}>
-              Soal {sesiAktif.indeks + 1} dari {total}
-              {soal.id.startsWith('guru:') ? ' • dari guru' : ''}
-            </Text>
-        </View>
-        <View style={styles.progresLatar}>
-          <View style={[styles.progresIsi, { width: `${Math.round(progres * 100)}%` }]} />
-        </View>
+      <View style={styles.layar}>
+        <ScrollView
+          contentContainerStyle={styles.isi}
+          keyboardShouldPersistTaps="handled"
+          importantForAccessibility={hasilIni ? 'no-hide-descendants' : 'auto'}
+          accessibilityElementsHidden={!!hasilIni}
+        >
+          <KepalaSoal
+            indeks={sesiAktif.indeks}
+            total={total}
+            chip={chip}
+            dariGuru={soal.id.startsWith('guru:')}
+          />
 
-        {soal.jenis === 'simulasi' ? renderSimulasi(soal, sesiAktif) : renderPilihanGanda(soal, sesiAktif)}
+          {soal.jenis === 'simulasi' ? renderSimulasi(soal, sesiAktif) : renderPilihanGanda(soal, sesiAktif)}
 
-        {!sesiAktif.diperiksa && (
-          <TouchableOpacity
-            style={[styles.tombolHijau, (!lengkap || !siap) && styles.mati]}
-            onPress={() => periksa(soal)}
-            disabled={!lengkap || !siap}
-          >
-            <Text style={styles.tombolHijauTeks}>Cek Jawaban</Text>
-          </TouchableOpacity>
-        )}
+          {!sesiAktif.diperiksa && (
+            <Tombol
+              label="Cek Jawaban"
+              varian="tebak"
+              ikon="checkmark"
+              tinggi={58}
+              sudut={20}
+              onPress={() => periksa(soal)}
+              nonaktif={!lengkap || !siap}
+              accessibilityHint={lengkap ? undefined : 'Isi semua jawaban dulu'}
+            />
+          )}
+        </ScrollView>
 
         {hasilIni && renderUmpanBalik(soal, hasilIni)}
-
-        {hasilIni && (
-          <TouchableOpacity
-            style={[styles.tombolHijau, terakhir && !riwayatSiap && styles.mati]}
-            onPress={berikutnya}
-            disabled={terakhir && !riwayatSiap}
-          >
-            <Text style={styles.tombolHijauTeks}>
-              {terakhir ? 'Lihat Hasil' : `Soal Berikutnya (${sesiAktif.indeks + 2}/${total})`}
-            </Text>
-          </TouchableOpacity>
-        )}
-      </ScrollView>
+      </View>
     </SafeAreaView>
+  );
+}
+
+function KotakInfo({
+  ikon,
+  warnaIkon,
+  angka,
+  label,
+}: {
+  ikon: ComponentProps<typeof Ionicons>['name'];
+  warnaIkon: string;
+  angka: string;
+  label: string;
+}) {
+  return (
+    <View style={styles.kotakInfo} accessible accessibilityLabel={`${angka} ${label}`}>
+      <Ionicons name={ikon} size={26} color={warnaIkon} />
+      <Text style={styles.kotakInfoAngka}>{angka}</Text>
+      <Text style={styles.kotakInfoLabel}>{label}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: warna.latar },
-  isi: { padding: 18, paddingBottom: 40 },
+  layar: { flex: 1 },
+  isi: { padding: 20, paddingBottom: 40, gap: 18 },
+  kolom: { flex: 1, gap: 4 },
 
-  banner: { backgroundColor: '#EDE9FE', borderRadius: 20, padding: 18, marginBottom: 14 },
-  bannerTag: { color: '#6D28D9', fontWeight: '800', fontSize: 11, letterSpacing: 0.5 },
-  bannerJudul: { fontSize: 22, fontWeight: '800', color: warna.teks, marginTop: 6 },
-  bannerSub: { color: warna.teksRedup, marginTop: 6, lineHeight: 20 },
-
-  kartu: {
-    backgroundColor: warna.kartu, borderRadius: 20, borderWidth: 1,
-    borderColor: warna.garis, padding: 18, marginBottom: 14,
+  // Pembuka
+  judulBlok: { alignItems: 'center', gap: 4 },
+  labelUngu: { fontFamily: font.judul, fontSize: 12, letterSpacing: 1, color: warna.ungu },
+  judulBesar: { fontFamily: font.judul, fontSize: 26, lineHeight: 32, color: warna.teks, textAlign: 'center' },
+  infoBaris: { flexDirection: 'row', gap: 10 },
+  kotakInfo: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: warna.garis,
+    paddingVertical: 14,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    gap: 4,
   },
-  judul: { fontSize: 18, fontWeight: '800', color: warna.teks, marginBottom: 8 },
-  butir: { color: warna.teksRedup, lineHeight: 24 },
-  isiTeks: { color: warna.teks, lineHeight: 21 },
-  sumber: { textAlign: 'center', color: warna.teksRedup, fontSize: 11, marginTop: 14 },
-
-  atas: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  tagPil: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
-  tagPilTeks: { color: '#fff', fontWeight: '800', fontSize: 11 },
-  nomor: { color: warna.teksRedup, fontWeight: '700' },
-  progresLatar: { height: 6, backgroundColor: warna.garis, borderRadius: 3, marginVertical: 12, overflow: 'hidden' },
-  progresIsi: { height: 6, backgroundColor: warna.hijau, borderRadius: 3 },
-
-  kode: { backgroundColor: warna.gelap, borderRadius: 16, padding: 16, marginBottom: 14 },
-  kodeJudul: { color: '#5EEAD4', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 },
-  kodeKonteks: { color: '#94A3B8', fontSize: 12, marginTop: 4, marginBottom: 10 },
-  kodeBaris: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4, paddingHorizontal: 6, borderRadius: 8 },
-  kodeAmbil: { backgroundColor: 'rgba(239,68,68,0.18)' },
-  kodeNo: { color: '#64748B', fontFamily: fontKode, width: 22 },
-  kodeTeks: { color: '#E2E8F0', fontFamily: fontKode, fontSize: 14, flex: 1 },
-  kodeTag: { color: '#FCA5A5', fontSize: 10, fontWeight: '800' },
-
-  pertanyaan: { fontSize: 16, fontWeight: '700', color: warna.teks, marginBottom: 12, lineHeight: 22 },
-  slot: {
-    borderRadius: 12, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#CBD5E1',
-    padding: 12, marginBottom: 8, backgroundColor: '#fff',
-  },
-  slotBenar: { borderColor: warna.hijau, backgroundColor: '#ECFDF5', borderStyle: 'solid' },
-  slotSalah: { borderColor: MERAH, backgroundColor: MERAH_MUDA, borderStyle: 'solid' },
-  slotLabel: { color: warna.teksRedup, fontSize: 11, fontWeight: '700' },
-  slotIsi: { color: warna.teks, fontWeight: '700', fontSize: 15, marginTop: 2 },
-  slotKosong: { color: '#94A3B8', fontWeight: '500' },
-  petunjuk: { color: warna.teksRedup, fontSize: 12, marginTop: 6, marginBottom: 8 },
-  chipBaris: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: {
-    backgroundColor: warna.latar, borderRadius: 999, borderWidth: 1,
-    borderColor: warna.garis, paddingHorizontal: 14, paddingVertical: 10,
-  },
-  chipTeks: { fontWeight: '700', color: warna.teks },
-
-  opsi: {
-    flexDirection: 'row', alignItems: 'center', borderRadius: 12, borderWidth: 1.5,
-    borderColor: warna.garis, padding: 12, marginBottom: 8, backgroundColor: '#fff',
-  },
-  opsiTerpilih: { borderColor: warna.biru, backgroundColor: warna.biruMuda },
-  opsiHuruf: { fontWeight: '800', color: warna.teksRedup, width: 26 },
-  opsiTeks: { flex: 1, color: warna.teks, fontWeight: '600' },
-
-  tombolHijau: { backgroundColor: warna.hijau, borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginBottom: 14 },
-  tombolHijauTeks: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  tombolKecil: {
-    alignSelf: 'flex-start', backgroundColor: '#fff', borderRadius: 10, borderWidth: 1,
-    borderColor: warna.garis, paddingHorizontal: 14, paddingVertical: 9, marginTop: 8,
-  },
-  tombolKecilTeks: { fontWeight: '700', color: warna.teks, fontSize: 13 },
-  mati: { opacity: 0.4 },
-
-  hadiahBaris: { flexDirection: 'row', gap: 10, marginBottom: 10 },
-  hadiahKotak: { flex: 1, backgroundColor: warna.latar, borderRadius: 14, padding: 14, alignItems: 'center' },
-  hadiahAngka: { fontSize: 22, fontWeight: '800', color: warna.teks },
-  hadiahLabel: { color: warna.teksRedup, marginTop: 2 },
-  statusOk: { color: warna.hijauTeks, fontWeight: '700' },
-  statusGalat: { color: '#B91C1C', lineHeight: 20 },
-
-  hasilBanner: { borderRadius: 16, padding: 16, marginBottom: 14 },
-  hasilBenar: { backgroundColor: '#ECFDF5' },
-  hasilSalah: { backgroundColor: MERAH_MUDA },
-  hasilJudul: { fontSize: 18, fontWeight: '800' },
-  hasilIsi: { color: warna.teks, marginTop: 4, fontWeight: '600', lineHeight: 20 },
-
-  langkah: { flexDirection: 'row', marginBottom: 8 },
-  langkahNo: { width: 24, color: warna.teksRedup, fontWeight: '800' },
-  langkahOp: { fontFamily: fontKode, color: warna.teks, fontSize: 13 },
-  langkahIsi: { fontFamily: fontKode, color: warna.teksRedup, fontSize: 12, marginTop: 2 },
-  akhir: { marginTop: 6, fontWeight: '700', color: warna.hijauTeks },
+  kotakInfoAngka: { fontFamily: font.judul, fontSize: 18, color: warna.teks },
+  kotakInfoLabel: { fontFamily: font.isi, fontSize: 12, color: warna.teksRedup },
+  tingkat: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, justifyContent: 'center' },
+  tingkatLabel: { fontFamily: font.tebal, fontSize: 13, color: warna.teksRedup },
+  tingkatItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  pilTingkat: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  pilTingkatTeks: { fontFamily: font.judul, fontSize: 12 },
 
   peringatan: {
-    backgroundColor: warna.kotakKode, borderRadius: 16, borderWidth: 1,
-    borderColor: '#F5C9B5', padding: 16, marginBottom: 14,
+    flexDirection: 'row',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#FED7AA',
+    padding: 12,
   },
-  peringatanJudul: { fontWeight: '800', color: '#7C2D12', marginBottom: 6 },
-  peringatanIsi: { color: '#7C2D12', lineHeight: 20 },
-  peringatanTips: { color: '#B45309', marginTop: 6, fontWeight: '600', lineHeight: 20 },
+  peringatanIsi: { fontFamily: font.isi, fontSize: 13, lineHeight: 19, color: warna.teks },
+  tautan: {
+    fontFamily: font.tebal,
+    fontSize: 14,
+    color: warna.ungu,
+    paddingVertical: 12,
+    alignSelf: 'flex-start',
+  },
 
-  barisHasil: { flexDirection: 'row', alignItems: 'center', paddingVertical: 6 },
-  hasilIkon: { fontSize: 16, marginRight: 8 },
-  hasilNama: { flex: 1, color: warna.teks, fontWeight: '600' },
+  riwayat: { gap: 10 },
+  kartuRiwayat: { gap: 6 },
+  isiTeks: { fontFamily: font.isi, fontSize: 14, lineHeight: 21, color: warna.teks },
+  petunjuk: { fontFamily: font.semi, fontSize: 12, color: warna.teksRedup },
+  butir: { fontFamily: font.isi, fontSize: 14, lineHeight: 21, color: warna.teks },
+
+  // Soal
+  pertanyaan: { fontFamily: font.judul, fontSize: 20, lineHeight: 27, color: warna.teks },
+  slot: { gap: 8 },
+  token: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, justifyContent: 'center' },
+
+  // Hasil
+  hadiahBaris: { flexDirection: 'row', gap: 10 },
+  status: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  statusTeks: { flex: 1, fontFamily: font.semi, fontSize: 13, lineHeight: 19, color: warna.teksRedup },
+  bagian: { gap: 10 },
+  judulBagian: { fontFamily: font.judul, fontSize: 18, color: warna.teks },
+  sumber: { fontFamily: font.isi, fontSize: 12, color: warna.teksRedup, textAlign: 'center' },
 });

@@ -63,6 +63,11 @@ const PASANGAN: [string, string, string][] = [
   ['label TOP & pil LIFO di putih', warna.persikTeks, PUTIH],
   // Tampilan tahap 7 (Profil)
   ['teks tombol Keluar di putih', '#B91C1C', PUTIH],
+  // Tampilan tahap 8 (Kelola Soal & Form Soal)
+  ['chip perintah push di Stack', warna.persikTeks, '#FFF7ED'],
+  ['chip perintah enqueue di Queue', warna.biru, '#F0F9FF'],
+  ['isi akhir di kunci jawaban', '#FCD34D', '#1E293B'],
+  ['tag TOP/F/R di kunci jawaban', '#5EEAD4', '#1E293B'],
 ];
 
 describe('Kontras warna (WCAG AA, teks normal minimal 4,5:1)', () => {

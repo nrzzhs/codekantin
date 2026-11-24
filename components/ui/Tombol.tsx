@@ -29,6 +29,8 @@ type Props = {
   tinggi?: number;
   /** Radius sudut kustom. Menimpa `besar`. */
   sudut?: number;
+  /** Warna latar & teks saat nonaktif, menimpa bawaan varian. */
+  warnaNonaktif?: { latar: string; teks: string };
 };
 
 const TINGGI = 52;
@@ -72,6 +74,7 @@ export default function Tombol({
   besar = false,
   tinggi,
   sudut,
+  warnaNonaktif,
 }: Props) {
   const kurangiGerak = useReducedMotion();
   const turun = useSharedValue(0);
@@ -79,7 +82,7 @@ export default function Tombol({
   // Tombol nonaktif digambar "sudah tertekan" dan tanpa bayangan
   const datar = nonaktif && !memuat;
   const w = WARNA[varian];
-  const mati = w.mati ?? NONAKTIF;
+  const mati = warnaNonaktif ?? w.mati ?? NONAKTIF;
   const latar = datar ? mati.latar : w.latar;
   const teks = datar ? mati.teks : w.teks;
 

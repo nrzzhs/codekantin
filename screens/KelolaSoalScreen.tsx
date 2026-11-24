@@ -1,23 +1,18 @@
 import { useCallback, useState } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  ScrollView,
-  RefreshControl,
-  Switch,
-  Alert,
-  StyleSheet,
-} from 'react-native';
+import { View, Text, Pressable, ScrollView, RefreshControl, Alert, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { warna } from '../lib/tema';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { font, warna } from '../lib/tema';
 import { ambilSoalSaya, hapusSoal, setAktif } from '../lib/bankSoal';
 import { hitungRingkasan, ringkasSoal, saring } from '../logic/formSoal';
 import type { BarisKelola, FilterSoal } from '../logic/formSoal';
 import { useBankSoal } from '../context/BankSoalContext';
 import { SpinnerPiring } from '../components/Loading';
 import KeadaanKosong from '../components/ui/KeadaanKosong';
+import Tombol from '../components/ui/Tombol';
+import KokiPiri from '../components/ilustrasi/KokiPiri';
+import KartuSoalGuru from '../components/guru/KartuSoalGuru';
 
 type Props = { userId: string };
 
@@ -101,67 +96,98 @@ export default function KelolaSoalScreen({ userId }: Props) {
   const semua = daftar ?? [];
   const ringkas = hitungRingkasan(semua);
   const tampil = saring(semua, filter);
+  const jumlahFilter: Record<FilterSoal, number> = {
+    semua: ringkas.total,
+    aktif: ringkas.aktif,
+    nonaktif: ringkas.nonaktif,
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView
         contentContainerStyle={styles.isi}
-        refreshControl={<RefreshControl refreshing={memuat && daftar !== null} onRefresh={muat} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={memuat && daftar !== null}
+            onRefresh={muat}
+            colors={[warna.hijau]}
+            tintColor={warna.hijau}
+          />
+        }
       >
-        <View style={styles.banner}>
-          <Text style={styles.bannerTag}>MODE GURU</Text>
-          <Text style={styles.bannerJudul}>Kelola Bank Soal</Text>
-          <Text style={styles.bannerSub}>
-            Soal aktif milikmu ikut muncul di sesi Tebak semua siswa. Kunci jawaban dihitung otomatis
-            dari perintah yang kamu tulis.
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.kotakIkon}>
+            <Ionicons name="document-text-outline" size={26} color={warna.hijauTua} />
+          </View>
+          <View style={styles.headerKolom}>
+            <Text style={styles.judul} accessibilityRole="header">
+              Bank Soal
+            </Text>
+            <View style={styles.chipGuru}>
+              <Text style={styles.chipGuruTeks}>MODE GURU</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Info Koki Piri */}
+        <View style={styles.info}>
+          <KokiPiri ukuran={44} />
+          <Text style={styles.infoTeks}>
+            Soal aktif milikmu ikut muncul di sesi Tebak semua siswa. Kunci jawaban dihitung otomatis dari
+            perintah yang kamu tulis.
           </Text>
         </View>
 
+        {/* Statistik */}
         <View style={styles.statBaris}>
-          <View style={styles.statKotak}>
-            <Text style={styles.statAngka}>{ringkas.total}</Text>
-            <Text style={styles.statLabel}>Total</Text>
-          </View>
-          <View style={styles.statKotak}>
-            <Text style={styles.statAngka}>{ringkas.aktif}</Text>
-            <Text style={styles.statLabel}>Aktif</Text>
-          </View>
-          <View style={styles.statKotak}>
-            <Text style={styles.statAngka}>{ringkas.nonaktif}</Text>
-            <Text style={styles.statLabel}>Nonaktif</Text>
-          </View>
+          <Stat angka={ringkas.total} label="Total" warnaAngka={warna.teks} />
+          <Stat angka={ringkas.aktif} label="Aktif" warnaAngka={warna.hijau} />
+          <Stat angka={ringkas.nonaktif} label="Nonaktif" warnaAngka={warna.teksRedup} />
         </View>
 
-        <TouchableOpacity
-          style={styles.tombolUtama}
+        <Tombol
+          label="Soal baru"
+          varian="utama"
+          ikon="add"
+          tinggi={56}
           onPress={() => navigation.navigate('FormSoal')}
-          accessibilityRole="button"
-        >
-          <Text style={styles.tombolUtamaTeks}>＋ Soal baru</Text>
-        </TouchableOpacity>
+        />
 
-        <View style={styles.filterBaris}>
-          {FILTER.map((f) => (
-            <TouchableOpacity
-              key={f.id}
-              style={[styles.pil, filter === f.id && styles.pilAktif]}
-              onPress={() => setFilter(f.id)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: filter === f.id }}
-            >
-              <Text style={[styles.pilTeks, filter === f.id && styles.pilTeksAktif]}>{f.label}</Text>
-            </TouchableOpacity>
-          ))}
+        {/* Saringan */}
+        <View style={styles.segmen} accessibilityRole="tablist">
+          {FILTER.map((f) => {
+            const dipilih = filter === f.id;
+            return (
+              <Pressable
+                key={f.id}
+                style={[styles.segmenTombol, dipilih && styles.segmenAktif]}
+                onPress={() => setFilter(f.id)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: dipilih }}
+                accessibilityLabel={`${f.label}, ${jumlahFilter[f.id]} soal`}
+              >
+                <Text style={[styles.segmenTeks, dipilih && styles.segmenTeksAktif]}>
+                  {f.label} {jumlahFilter[f.id]}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
 
-        {daftar === null && memuat && <SpinnerPiring ukuran={72} label="Memuat soal" style={{ marginTop: 24, alignSelf: 'center' }} />}
+        {daftar === null && memuat && (
+          <SpinnerPiring ukuran={72} label="Memuat soal" style={{ marginTop: 10, alignSelf: 'center' }} />
+        )}
 
         {galat && (
-          <View style={styles.kotakGalat}>
-            <Text style={styles.galatTeks}>{galat}</Text>
-            <TouchableOpacity style={styles.tombolKecil} onPress={muat}>
-              <Text style={styles.tombolKecilTeks}>Coba lagi</Text>
-            </TouchableOpacity>
+          <View style={styles.kotakGalat} accessibilityRole="alert">
+            <Ionicons name="warning-outline" size={20} color="#B91C1C" />
+            <View style={styles.kolom}>
+              <Text style={styles.galatTeks}>{galat}</Text>
+              <Pressable onPress={muat} style={styles.cobaLagi} accessibilityRole="button">
+                <Text style={styles.cobaLagiTeks}>Coba lagi</Text>
+              </Pressable>
+            </View>
           </View>
         )}
 
@@ -174,114 +200,103 @@ export default function KelolaSoalScreen({ userId }: Props) {
         )}
 
         {daftar !== null && tampil.length === 0 && !galat && ringkas.total > 0 && (
-          <Text style={styles.kosong}>Tidak ada soal untuk filter ini.</Text>
+          <Text style={styles.kosong}>Tidak ada soal di daftar ini.</Text>
         )}
 
-        {tampil.map((b) => {
-          const r = ringkasSoal(b);
-          return (
-            <View key={b.id} style={[styles.kartu, !b.aktif && styles.kartuMati]}>
-              <View style={styles.barisAtas}>
-                <View style={styles.lencana}>
-                  <Text style={styles.lencanaTeks}>
-                    {r.jenisLabel} • {r.subLabel}
-                  </Text>
-                </View>
-                {!b.aktif && <Text style={styles.tagNonaktif}>NONAKTIF</Text>}
-              </View>
-
-              <Text style={styles.judul}>{r.judul}</Text>
-              <Text style={styles.rincian}>{r.rincian}</Text>
-
-              <View style={styles.aksi}>
-                <View style={styles.sakelar}>
-                  <Switch
-                    value={b.aktif}
-                    onValueChange={(v) => ubahAktif(b, v)}
-                    disabled={sibuk !== null}
-                    accessibilityLabel={`Soal ${b.aktif ? 'aktif' : 'nonaktif'}. Ketuk untuk mengubah.`}
-                  />
-                  <Text style={styles.sakelarTeks}>{b.aktif ? 'Aktif' : 'Nonaktif'}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.tombolKecil}
-                  onPress={() => navigation.navigate('FormSoal', { soal: b })}
-                  disabled={sibuk !== null}
-                  accessibilityRole="button"
-                >
-                  <Text style={styles.tombolKecilTeks}>Ubah</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.tombolKecil}
-                  onPress={() => konfirmasiHapus(b)}
-                  disabled={sibuk !== null}
-                  accessibilityRole="button"
-                >
-                  <Text style={[styles.tombolKecilTeks, { color: '#B91C1C' }]}>Hapus</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          );
-        })}
+        {tampil.map((b) => (
+          <KartuSoalGuru
+            key={b.id}
+            soal={b}
+            ringkas={ringkasSoal(b)}
+            sibuk={sibuk !== null}
+            onUbahAktif={(v) => ubahAktif(b, v)}
+            onUbah={() => navigation.navigate('FormSoal', { soal: b })}
+            onHapus={() => konfirmasiHapus(b)}
+          />
+        ))}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+function Stat({ angka, label, warnaAngka }: { angka: number; label: string; warnaAngka: string }) {
+  return (
+    <View style={styles.statKotak} accessible accessibilityLabel={`${label}: ${angka}`}>
+      <Text style={[styles.statAngka, { color: warnaAngka }]}>{angka}</Text>
+      <Text style={styles.statLabel}>{label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: warna.latar },
-  isi: { padding: 18, paddingBottom: 40 },
+  isi: { padding: 20, paddingBottom: 40, gap: 14 },
+  kolom: { flex: 1, gap: 4 },
 
-  banner: { backgroundColor: warna.hijauMuda, borderRadius: 20, padding: 18, marginBottom: 14 },
-  bannerTag: { color: '#0F766E', fontWeight: '800', fontSize: 11, letterSpacing: 0.5 },
-  bannerJudul: { fontSize: 22, fontWeight: '800', color: warna.teks, marginTop: 6 },
-  bannerSub: { color: warna.teksRedup, marginTop: 6, lineHeight: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  kotakIkon: {
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: warna.hijauMuda,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerKolom: { flex: 1, alignItems: 'flex-start', gap: 4 },
+  judul: { fontFamily: font.judul, fontSize: 22, color: warna.teks },
+  chipGuru: { backgroundColor: warna.hijauMuda, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  chipGuruTeks: { fontFamily: font.judul, fontSize: 11, color: warna.hijauTua },
 
-  statBaris: { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  info: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: warna.garis,
+    padding: 12,
+  },
+  infoTeks: { flex: 1, fontFamily: font.tebal, fontSize: 13, lineHeight: 19, color: warna.teks },
+
+  statBaris: { flexDirection: 'row', gap: 10 },
   statKotak: {
-    flex: 1, backgroundColor: warna.kartu, borderRadius: 14, borderWidth: 1,
-    borderColor: warna.garis, paddingVertical: 12, alignItems: 'center',
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: warna.garis,
+    paddingVertical: 12,
+    alignItems: 'center',
   },
-  statAngka: { fontSize: 22, fontWeight: '800', color: warna.teks },
-  statLabel: { color: warna.teksRedup, marginTop: 2 },
+  statAngka: { fontFamily: font.judul, fontSize: 24 },
+  statLabel: { fontFamily: font.tebal, fontSize: 12, color: warna.teksRedup },
 
-  tombolUtama: {
-    backgroundColor: warna.hijau, borderRadius: 14, minHeight: 48,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+  segmen: { flexDirection: 'row', backgroundColor: warna.garis, borderRadius: 16, padding: 4 },
+  segmenTombol: { flex: 1, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  segmenAktif: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#1F1A17',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  tombolUtamaTeks: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  segmenTeks: { fontFamily: font.tebal, fontSize: 13, color: warna.teksRedup },
+  segmenTeksAktif: { color: warna.teks },
 
-  filterBaris: { flexDirection: 'row', gap: 8, marginBottom: 14 },
-  pil: {
-    minHeight: 44, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1,
-    borderColor: warna.garis, backgroundColor: '#fff', justifyContent: 'center',
+  kotakGalat: {
+    flexDirection: 'row',
+    gap: 10,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    padding: 14,
   },
-  pilAktif: { backgroundColor: warna.gelap, borderColor: warna.gelap },
-  pilTeks: { fontWeight: '700', color: warna.teks },
-  pilTeksAktif: { color: '#fff' },
+  galatTeks: { fontFamily: font.isi, fontSize: 14, lineHeight: 20, color: '#B91C1C' },
+  cobaLagi: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
+  cobaLagiTeks: { fontFamily: font.tebal, fontSize: 14, color: '#B91C1C' },
 
-  kotakGalat: { backgroundColor: '#FEE2E2', borderRadius: 14, padding: 14, marginBottom: 14 },
-  galatTeks: { color: '#B91C1C', lineHeight: 20 },
-  kosong: { color: warna.teksRedup, textAlign: 'center', marginTop: 24, lineHeight: 22 },
-
-  kartu: {
-    backgroundColor: warna.kartu, borderRadius: 18, borderWidth: 1,
-    borderColor: warna.garis, padding: 16, marginBottom: 12,
-  },
-  kartuMati: { backgroundColor: '#F7F1EA' },
-  barisAtas: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  lencana: { backgroundColor: warna.biruMuda, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
-  lencanaTeks: { color: warna.biru, fontWeight: '800', fontSize: 11 },
-  tagNonaktif: { color: warna.teksRedup, fontWeight: '800', fontSize: 11 },
-  judul: { fontSize: 16, fontWeight: '700', color: warna.teks, marginTop: 10, lineHeight: 22 },
-  rincian: { color: warna.teksRedup, marginTop: 4, lineHeight: 20 },
-
-  aksi: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
-  sakelar: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  sakelarTeks: { color: warna.teks, fontWeight: '600', marginLeft: 4 },
-  tombolKecil: {
-    minHeight: 44, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1,
-    borderColor: warna.garis, backgroundColor: '#fff', justifyContent: 'center',
-  },
-  tombolKecilTeks: { fontWeight: '700', color: warna.teks },
+  kosong: { fontFamily: font.isi, fontSize: 14, color: warna.teksRedup, textAlign: 'center', marginTop: 10 },
 });

@@ -1,11 +1,15 @@
-import { useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Alert, StyleSheet } from 'react-native';
+import { useMemo, useState, type ComponentProps, type ReactNode } from 'react';
+import { View, Text, TextInput, Pressable, ScrollView, Alert, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { warna, fontKode } from '../lib/tema';
+import * as Haptics from 'expo-haptics';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { font, fontKode, warna } from '../lib/tema';
 import { INFO_MISKONSEPSI } from '../data/miskonsepsi';
 import type { Miskonsepsi } from '../data/miskonsepsi';
 import type { Tingkat } from '../data/soal';
 import { BATAS } from '../logic/soalGuru';
+import { jalankan } from '../logic/simulasi';
 import {
   bangunPilihanGanda,
   bangunSimulasi,
@@ -25,33 +29,16 @@ import {
 import type { BarisKelola, FormPilihanGanda, FormSimulasi, OpsiForm } from '../logic/formSoal';
 import { tambahSoal, ubahSoal } from '../lib/bankSoal';
 import { useBankSoal } from '../context/BankSoalContext';
+import Kartu from '../components/ui/Kartu';
+import KolomIsian from '../components/ui/KolomIsian';
+import Tombol from '../components/ui/Tombol';
+import TombolPilihan, { IkonTingkat } from '../components/guru/TombolPilihan';
+import UbinPerintah from '../components/guru/UbinPerintah';
+import PratinjauKunci from '../components/guru/PratinjauKunci';
+import { WARNA_TINGKAT } from '../components/guru/perintah';
 
 const TINGKAT: Tingkat[] = ['mudah', 'sedang', 'menantang'];
 const DAFTAR_MISKONSEPSI = Object.keys(INFO_MISKONSEPSI) as Miskonsepsi[];
-
-function Pil({
-  teks,
-  aktif,
-  onPress,
-  mati,
-}: {
-  teks: string;
-  aktif: boolean;
-  onPress: () => void;
-  mati?: boolean;
-}) {
-  return (
-    <TouchableOpacity
-      style={[styles.pil, aktif && styles.pilAktif, mati && !aktif && styles.mati]}
-      onPress={onPress}
-      disabled={mati}
-      accessibilityRole="button"
-      accessibilityState={{ selected: aktif, disabled: !!mati }}
-    >
-      <Text style={[styles.pilTeks, aktif && styles.pilTeksAktif]}>{teks}</Text>
-    </TouchableOpacity>
-  );
-}
 
 export default function FormSoalScreen() {
   const navigation = useNavigation<any>();
@@ -70,6 +57,10 @@ export default function FormSoalScreen() {
   );
   const [disentuh, setDisentuh] = useState(!!sunting);
   const [menyimpan, setMenyimpan] = useState(false);
+
+  // Tampilan saja
+  const [editTeks, setEditTeks] = useState(false);
+  const [goyang, setGoyang] = useState(0);
 
   const hasilSim = useMemo(() => bangunSimulasi(sim), [sim]);
   const hasilPg = useMemo(() => bangunPilihanGanda(pg), [pg]);
@@ -134,301 +125,549 @@ export default function FormSoalScreen() {
     }
   }
 
-  return (
-    <ScrollView style={styles.latar} contentContainerStyle={styles.isi} keyboardShouldPersistTaps="handled">
-      <Text style={styles.label}>Jenis soal</Text>
-      <View style={styles.barisPil}>
-        <Pil teks="Simulasi" aktif={jenis === 'simulasi'} onPress={() => setJenis('simulasi')} mati={!!sunting} />
-        <Pil
-          teks="Pilihan ganda"
-          aktif={jenis === 'pilihan-ganda'}
-          onPress={() => setJenis('pilihan-ganda')}
-          mati={!!sunting}
-        />
-      </View>
-      {!!sunting && (
-        <Text style={styles.catatan}>
-          Jenis soal tidak bisa diubah. Buat soal baru kalau ingin jenis yang lain.
-        </Text>
-      )}
+  // ===== Tombol cepat (isi perintahnya sama seperti sebelumnya) =====
+  // Kalau perintah yang baru ditambahkan langsung gagal (mengambil dari struktur kosong,
+  // atau lebih dari batas), area ubin bergoyang dan HP bergetar. Tampilan saja.
+  function getarKalauGagal(teksBaru: string) {
+    const ops = parsePerintah(teksBaru);
+    let gagal = ops.length > BATAS.perintahMaks;
+    if (!gagal) {
+      try {
+        const h = jalankan(sim.struktur, ops);
+        gagal = h.langkah.length > 0 && h.langkah[h.langkah.length - 1].galat !== null;
+      } catch {
+        gagal = false; // baris tidak valid ditulis manual; pesan galatnya tetap tampil
+      }
+    }
+    if (gagal) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      setGoyang((g) => g + 1);
+    }
+  }
 
-      {jenis === 'simulasi' ? (
-        <>
-          <Text style={styles.label}>Struktur data</Text>
-          <View style={styles.barisPil}>
-            <Pil
-              teks="Stack (LIFO)"
-              aktif={sim.struktur === 'stack'}
-              onPress={() => ubahSim({ struktur: 'stack', perintah: terjemahkanPerintah(sim.perintah, 'stack') })}
-            />
-            <Pil
-              teks="Queue (FIFO)"
-              aktif={sim.struktur === 'queue'}
-              onPress={() => ubahSim({ struktur: 'queue', perintah: terjemahkanPerintah(sim.perintah, 'queue') })}
-            />
-          </View>
+  function cepatTambah() {
+    const baru = tambahBaris(sim.perintah, `${namaTambah}(${nilaiBerikutnya(daftarPerintah)})`);
+    ubahSim({ perintah: baru });
+    getarKalauGagal(baru);
+  }
 
-          <Text style={styles.label}>Tingkat</Text>
-          <View style={styles.barisPil}>
-            {TINGKAT.map((t) => (
-              <Pil key={t} teks={t} aktif={sim.tingkat === t} onPress={() => ubahSim({ tingkat: t })} />
-            ))}
-          </View>
+  function cepatAmbil() {
+    const baru = tambahBaris(sim.perintah, `${namaAmbil}()`);
+    ubahSim({ perintah: baru });
+    getarKalauGagal(baru);
+  }
 
-          <Text style={styles.label}>Konteks (opsional)</Text>
-          <TextInput
-            style={styles.input}
-            value={sim.konteks}
-            onChangeText={(t) => ubahSim({ konteks: t })}
-            maxLength={BATAS.konteks}
-            placeholder="Contoh: Piring bernomor ditumpuk di rak cuci."
-            placeholderTextColor="#6B625B"
-          />
+  function cepatHapus() {
+    ubahSim({ perintah: hapusBarisTerakhir(sim.perintah) });
+  }
 
-          <Text style={styles.label}>
-            Perintah ({daftarPerintah.length}/{BATAS.perintahMaks})
-          </Text>
-          <TextInput
-            style={[styles.input, styles.inputPerintah]}
-            value={sim.perintah}
-            onChangeText={(t) => ubahSim({ perintah: t })}
-            multiline
-            maxLength={600}
-            autoCapitalize="none"
-            autoCorrect={false}
-            placeholder={`${namaTambah}(1)\n${namaTambah}(2)\n${namaAmbil}()`}
-            placeholderTextColor="#6B625B"
-          />
-          <Text style={styles.catatan}>
-            Satu perintah per baris. Setiap nilai harus berbeda, dan jangan sampai mengambil dari struktur
-            yang kosong.
-          </Text>
+  const warnaStruktur = sim.struktur === 'stack' ? warna.oranye : warna.biru;
 
-          <View style={styles.barisPil}>
-            <TouchableOpacity
-              style={styles.tombolKecil}
-              onPress={() =>
-                ubahSim({ perintah: tambahBaris(sim.perintah, `${namaTambah}(${nilaiBerikutnya(daftarPerintah)})`) })
-              }
-              accessibilityRole="button"
-            >
-              <Text style={styles.tombolKecilTeks}>＋ {namaTambah}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.tombolKecil}
-              onPress={() => ubahSim({ perintah: tambahBaris(sim.perintah, `${namaAmbil}()`) })}
-              accessibilityRole="button"
-            >
-              <Text style={styles.tombolKecilTeks}>＋ {namaAmbil}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.tombolKecil}
-              onPress={() => ubahSim({ perintah: hapusBarisTerakhir(sim.perintah) })}
-              accessibilityRole="button"
-            >
-              <Text style={styles.tombolKecilTeks}>↩ Hapus terakhir</Text>
-            </TouchableOpacity>
-          </View>
-        </>
-      ) : (
-        <>
-          <Text style={styles.label}>Pertanyaan</Text>
-          <TextInput
-            style={[styles.input, styles.inputBesar]}
-            value={pg.pertanyaan}
-            onChangeText={(t) => ubahPg({ pertanyaan: t })}
-            multiline
-            maxLength={BATAS.pertanyaanMaks}
-            placeholder="Tulis pertanyaannya di sini"
-            placeholderTextColor="#6B625B"
-          />
-
-          <Text style={styles.label}>Pilihan jawaban (ketuk lingkaran untuk menandai yang benar)</Text>
-          {pg.opsi.map((o, i) => {
-            const benar = i === pg.indeksBenar;
-            const huruf = String.fromCharCode(65 + i);
-            return (
-              <View key={i} style={[styles.opsi, benar && styles.opsiBenar]}>
-                <View style={styles.opsiAtas}>
-                  <TouchableOpacity
-                    onPress={() => ubahPg({ indeksBenar: i })}
-                    style={styles.radio}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: benar }}
-                    accessibilityLabel={`Tandai pilihan ${huruf} sebagai jawaban benar`}
-                  >
-                    <View style={[styles.radioDalam, benar && styles.radioDalamAktif]} />
-                  </TouchableOpacity>
-                  <Text style={styles.opsiHuruf}>{huruf}</Text>
-                  <TextInput
-                    style={[styles.input, styles.opsiInput]}
-                    value={o.teks}
-                    onChangeText={(t) => ubahOpsi(i, { teks: t })}
-                    maxLength={BATAS.teksPilihanMaks}
-                    placeholder={`Pilihan ${huruf}`}
-                    placeholderTextColor="#6B625B"
-                  />
-                </View>
-                {!benar && (
-                  <TouchableOpacity
-                    style={styles.tombolKecil}
-                    onPress={() => siklusMiskonsepsi(i)}
-                    accessibilityRole="button"
-                  >
-                    <Text style={styles.tombolKecilTeks}>
-                      Miskonsepsi: {o.miskonsepsi ? INFO_MISKONSEPSI[o.miskonsepsi].judul : 'tidak ada'} ▸
-                    </Text>
-                  </TouchableOpacity>
-                )}
-                {pg.opsi.length > BATAS.pilihanMin && (
-                  <TouchableOpacity style={styles.hapusOpsi} onPress={() => hapusOpsi(i)} accessibilityRole="button">
-                    <Text style={styles.hapusOpsiTeks}>Hapus pilihan {huruf}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          })}
-          {pg.opsi.length < BATAS.pilihanMaks && (
-            <TouchableOpacity style={styles.tombolKecil} onPress={tambahOpsi} accessibilityRole="button">
-              <Text style={styles.tombolKecilTeks}>＋ Tambah pilihan</Text>
-            </TouchableOpacity>
-          )}
-
-          <Text style={styles.label}>Penjelasan jawaban</Text>
-          <TextInput
-            style={[styles.input, styles.inputBesar]}
-            value={pg.penjelasan}
-            onChangeText={(t) => ubahPg({ penjelasan: t })}
-            multiline
-            maxLength={BATAS.penjelasanMaks}
-            placeholder="Mengapa jawaban itu benar? (tampil setelah siswa menjawab)"
-            placeholderTextColor="#6B625B"
-          />
-        </>
-      )}
-
-      {disentuh && daftarGalat.length > 0 && (
-        <View style={styles.kotakGalat}>
+  const kotakGalat =
+    disentuh && daftarGalat.length > 0 ? (
+      <View style={styles.kotakGalat} accessibilityRole="alert">
+        <Ionicons name="warning-outline" size={20} color="#B91C1C" />
+        <View style={styles.kolom}>
           <Text style={styles.galatJudul}>Belum bisa disimpan:</Text>
           {daftarGalat.map((g, i) => (
-            <Text key={i} style={styles.galatTeks}>• {g}</Text>
-          ))}
-        </View>
-      )}
-
-      {daftarPeringatan.length > 0 && (
-        <View style={styles.kotakPeringatan}>
-          <Text style={styles.peringatanJudul}>⚠️ Saran perbaikan (tidak menghalangi penyimpanan):</Text>
-          {daftarPeringatan.map((g, i) => (
-            <Text key={i} style={styles.peringatanTeks}>• {g}</Text>
-          ))}
-        </View>
-      )}
-
-      {jenis === 'simulasi' && pratinjau && (
-        <View style={styles.kode}>
-          <Text style={styles.kodeJudul}>PRATINJAU KUNCI (DIHITUNG OTOMATIS)</Text>
-          <Text style={styles.kodeBaris}>
-            Urutan keluar: {pratinjau.keluar.join(' → ')}
-          </Text>
-          <Text style={styles.kodeBaris}>
-            Isi akhir: [{pratinjau.isiAkhir.join(', ')}] · {pratinjau.ujung}
-          </Text>
-          <View style={styles.garis} />
-          {pratinjau.langkah.map((l, i) => (
-            <Text key={i} style={styles.kodeLangkah}>
-              {i + 1}. {l.perintah}
-              {l.keluar !== null ? ` → ${l.keluar}` : ''}  [{l.isi.join(', ')}]
+            <Text key={i} style={styles.galatTeks}>
+              • {g}
             </Text>
           ))}
         </View>
-      )}
+      </View>
+    ) : null;
 
-      <TouchableOpacity
-        style={[styles.tombolSimpan, (!hasil.ok || menyimpan) && styles.mati]}
-        onPress={simpan}
-        disabled={!hasil.ok || menyimpan}
-        accessibilityRole="button"
-      >
-        <Text style={styles.tombolSimpanTeks}>
-          {menyimpan ? 'Menyimpan...' : sunting ? 'Simpan perubahan' : 'Simpan soal'}
-        </Text>
-      </TouchableOpacity>
-      {!sunting && (
-        <Text style={styles.catatan}>
-          Soal baru langsung aktif dan bisa muncul di sesi Tebak semua siswa. Kamu bisa menonaktifkannya
-          kapan saja dari daftar.
-        </Text>
+  return (
+    <SafeAreaView style={styles.latar} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.isi} keyboardShouldPersistTaps="handled">
+        {/* Header */}
+        <View style={styles.header}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={({ pressed }) => [styles.kembali, pressed && { backgroundColor: warna.kotakKode }]}
+            accessibilityRole="button"
+            accessibilityLabel="Kembali"
+          >
+            <Ionicons name="arrow-back" size={22} color={warna.teks} />
+          </Pressable>
+          <Text style={styles.judulLayar} accessibilityRole="header">
+            {sunting ? 'Ubah Soal' : 'Soal Baru'}
+          </Text>
+        </View>
+
+        {/* Pilihan */}
+        <Kartu style={styles.kartu}>
+          <Grup label="Jenis soal">
+            <TombolPilihan
+              label="Simulasi"
+              ikon="list-outline"
+              terpilih={jenis === 'simulasi'}
+              warnaTerpilih={warna.ungu}
+              onPress={() => setJenis('simulasi')}
+              nonaktif={!!sunting}
+            />
+            <TombolPilihan
+              label="Pilihan ganda"
+              ikon="list-circle-outline"
+              terpilih={jenis === 'pilihan-ganda'}
+              warnaTerpilih={warna.ungu}
+              onPress={() => setJenis('pilihan-ganda')}
+              nonaktif={!!sunting}
+            />
+          </Grup>
+          {!!sunting && (
+            <Text style={styles.catatan}>
+              Jenis soal tidak bisa diubah. Buat soal baru kalau ingin jenis yang lain.
+            </Text>
+          )}
+
+          {jenis === 'simulasi' && (
+            <>
+              <Grup label="Struktur data">
+                <TombolPilihan
+                  label="Stack"
+                  ikon="layers-outline"
+                  terpilih={sim.struktur === 'stack'}
+                  warnaTerpilih={warna.oranye}
+                  onPress={() =>
+                    ubahSim({ struktur: 'stack', perintah: terjemahkanPerintah(sim.perintah, 'stack') })
+                  }
+                />
+                <TombolPilihan
+                  label="Queue"
+                  ikon="people-outline"
+                  terpilih={sim.struktur === 'queue'}
+                  warnaTerpilih={warna.biru}
+                  onPress={() =>
+                    ubahSim({ struktur: 'queue', perintah: terjemahkanPerintah(sim.perintah, 'queue') })
+                  }
+                />
+              </Grup>
+
+              <Grup label="Tingkat">
+                {TINGKAT.map((t, i) => (
+                  <TombolPilihan
+                    key={t}
+                    label={t}
+                    ikon={(w) => <IkonTingkat jumlah={i + 1} warnaIkon={w} />}
+                    terpilih={sim.tingkat === t}
+                    warnaTerpilih={WARNA_TINGKAT[t].kuat}
+                    onPress={() => ubahSim({ tingkat: t })}
+                  />
+                ))}
+              </Grup>
+
+              <KolomIsian
+                label="Cerita singkat (opsional)"
+                ikon="chatbox-outline"
+                value={sim.konteks}
+                onChangeText={(t) => ubahSim({ konteks: t })}
+                maxLength={BATAS.konteks}
+                placeholder={
+                  sim.struktur === 'stack'
+                    ? 'Contoh: Piring bernomor ditumpuk di rak cuci.'
+                    : 'Contoh: Siswa antre beli bakso.'
+                }
+              />
+            </>
+          )}
+        </Kartu>
+
+        {jenis === 'simulasi' ? (
+          <>
+            {/* Susun perintah */}
+            <Kartu style={styles.kartu}>
+              <View style={styles.judulBaris}>
+                <Text style={styles.judulKartu} accessibilityRole="header">
+                  Susun perintah
+                </Text>
+                <View style={styles.pil} accessible accessibilityLabel={`${daftarPerintah.length} dari ${BATAS.perintahMaks} perintah`}>
+                  <Text style={styles.pilTeks}>
+                    {daftarPerintah.length}/{BATAS.perintahMaks}
+                  </Text>
+                </View>
+              </View>
+
+              <UbinPerintah perintah={daftarPerintah} struktur={sim.struktur} goyang={goyang} />
+
+              {kotakGalat}
+
+              <View style={styles.barisCepat}>
+                <TombolCepat
+                  label={`+ ${namaTambah}`}
+                  latar={warnaStruktur}
+                  bayangan={sim.struktur === 'stack' ? '#8A2E08' : '#024B73'}
+                  warnaTeks="#FFFFFF"
+                  onPress={cepatTambah}
+                  a11y={`Tambah ${namaTambah}`}
+                />
+                <TombolCepat
+                  label={`+ ${namaAmbil}`}
+                  latar="#FFFFFF"
+                  garis="#FCA5A5"
+                  bayangan="#FCA5A5"
+                  warnaTeks="#B91C1C"
+                  onPress={cepatAmbil}
+                  a11y={`Tambah ${namaAmbil}`}
+                />
+                <TombolCepat
+                  label="Hapus"
+                  ikon="arrow-undo"
+                  latar="#FFFFFF"
+                  garis={warna.garis}
+                  bayangan={warna.garis}
+                  warnaTeks={warna.teks}
+                  onPress={cepatHapus}
+                  a11y="Hapus perintah terakhir"
+                  nonaktif={daftarPerintah.length === 0}
+                />
+              </View>
+
+              <Pressable
+                onPress={() => setEditTeks((v) => !v)}
+                style={styles.lipat}
+                accessibilityRole="button"
+                accessibilityState={{ expanded: editTeks }}
+                accessibilityLabel="Edit sebagai teks"
+              >
+                <Ionicons name="code-slash-outline" size={18} color={warna.teksRedup} />
+                <Text style={styles.lipatTeks}>Edit sebagai teks</Text>
+                <Ionicons name={editTeks ? 'chevron-up' : 'chevron-down'} size={18} color={warna.teksRedup} />
+              </Pressable>
+
+              {editTeks && (
+                <View style={styles.editTeks}>
+                  <TextInput
+                    style={styles.inputPerintah}
+                    value={sim.perintah}
+                    onChangeText={(t) => ubahSim({ perintah: t })}
+                    multiline
+                    maxLength={600}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder={`${namaTambah}(1)\n${namaTambah}(2)\n${namaAmbil}()`}
+                    placeholderTextColor={warna.teksRedup}
+                    accessibilityLabel="Daftar perintah, satu per baris"
+                  />
+                  <Text style={styles.catatan}>
+                    Satu perintah per baris. Setiap nilai harus berbeda, dan jangan sampai mengambil dari
+                    struktur yang kosong.
+                  </Text>
+                </View>
+              )}
+            </Kartu>
+
+            <PratinjauKunci
+              struktur={sim.struktur}
+              keluar={pratinjau ? pratinjau.keluar : null}
+              isiAkhir={pratinjau ? pratinjau.isiAkhir : null}
+            />
+          </>
+        ) : (
+          <>
+            <Kartu style={styles.kartu}>
+              <KolomIsian
+                label="Pertanyaan"
+                value={pg.pertanyaan}
+                onChangeText={(t) => ubahPg({ pertanyaan: t })}
+                multiline
+                maxLength={BATAS.pertanyaanMaks}
+                placeholder="Tulis pertanyaannya di sini"
+              />
+            </Kartu>
+
+            <Kartu style={styles.kartu}>
+              <Text style={styles.labelGrup}>Pilihan (ketuk huruf untuk menandai jawaban benar)</Text>
+              {pg.opsi.map((o, i) => {
+                const benar = i === pg.indeksBenar;
+                const huruf = String.fromCharCode(65 + i);
+                return (
+                  <View key={i} style={styles.opsi}>
+                    <View style={styles.opsiAtas}>
+                      <Pressable
+                        onPress={() => ubahPg({ indeksBenar: i })}
+                        style={[styles.huruf, benar && styles.hurufBenar]}
+                        accessibilityRole="radio"
+                        accessibilityState={{ checked: benar }}
+                        accessibilityLabel={`Tandai pilihan ${huruf} sebagai jawaban benar`}
+                      >
+                        <Text style={[styles.hurufTeks, benar && { color: '#FFFFFF' }]}>{huruf}</Text>
+                      </Pressable>
+                      <View style={styles.kolom}>
+                        <KolomIsian
+                          label={`Pilihan ${huruf}`}
+                          value={o.teks}
+                          onChangeText={(t) => ubahOpsi(i, { teks: t })}
+                          maxLength={BATAS.teksPilihanMaks}
+                          placeholder={`Pilihan ${huruf}`}
+                          aksen={benar ? warna.hijau : warna.biru}
+                        />
+                      </View>
+                    </View>
+                    <View style={styles.opsiAksi}>
+                      {!benar && (
+                        <Pressable
+                          style={styles.tautan}
+                          onPress={() => siklusMiskonsepsi(i)}
+                          accessibilityRole="button"
+                        >
+                          <Text style={styles.tautanTeks}>
+                            Miskonsepsi: {o.miskonsepsi ? INFO_MISKONSEPSI[o.miskonsepsi].judul : 'tidak ada'} ▸
+                          </Text>
+                        </Pressable>
+                      )}
+                      {pg.opsi.length > BATAS.pilihanMin && (
+                        <Pressable style={styles.tautan} onPress={() => hapusOpsi(i)} accessibilityRole="button">
+                          <Text style={[styles.tautanTeks, { color: '#B91C1C' }]}>Hapus pilihan {huruf}</Text>
+                        </Pressable>
+                      )}
+                    </View>
+                  </View>
+                );
+              })}
+              {pg.opsi.length < BATAS.pilihanMaks && (
+                <Tombol label="Tambah pilihan" varian="sekunder" ikon="add" onPress={tambahOpsi} />
+              )}
+            </Kartu>
+
+            <Kartu style={styles.kartu}>
+              <KolomIsian
+                label="Penjelasan jawaban"
+                value={pg.penjelasan}
+                onChangeText={(t) => ubahPg({ penjelasan: t })}
+                multiline
+                maxLength={BATAS.penjelasanMaks}
+                placeholder="Mengapa jawaban itu benar? (tampil setelah siswa menjawab)"
+              />
+            </Kartu>
+
+            {kotakGalat}
+          </>
+        )}
+
+        {daftarPeringatan.length > 0 && (
+          <View style={styles.kotakPeringatan}>
+            <Ionicons name="bulb-outline" size={20} color="#C2410C" />
+            <View style={styles.kolom}>
+              <Text style={styles.peringatanJudul}>Saran perbaikan (tidak menghalangi penyimpanan):</Text>
+              {daftarPeringatan.map((g, i) => (
+                <Text key={i} style={styles.peringatanTeks}>
+                  • {g}
+                </Text>
+              ))}
+            </View>
+          </View>
+        )}
+
+        <Tombol
+          label={sunting ? 'Simpan perubahan' : 'Simpan soal'}
+          varian="utama"
+          ikon="checkmark"
+          tinggi={58}
+          onPress={simpan}
+          nonaktif={!hasil.ok}
+          memuat={menyimpan}
+          warnaNonaktif={{ latar: warna.hijauMuda, teks: warna.hijauTua }}
+          accessibilityHint={hasil.ok ? undefined : 'Lengkapi soal dulu'}
+        />
+        {!sunting && (
+          <View style={styles.info}>
+            <Ionicons name="information-circle-outline" size={16} color={warna.teksRedup} />
+            <Text style={[styles.catatan, styles.kolom]}>
+              Soal baru langsung aktif dan bisa muncul di sesi Tebak semua siswa. Kamu bisa menonaktifkannya
+              kapan saja dari daftar.
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+function Grup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <View style={styles.grup}>
+      <Text style={styles.labelGrup}>{label}</Text>
+      <View style={styles.barisPilihan} accessibilityRole="radiogroup" accessibilityLabel={label}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
+const TINGGI_CEPAT = 52;
+const TURUN_CEPAT = 3;
+
+function TombolCepat({
+  label,
+  ikon,
+  latar,
+  garis,
+  bayangan,
+  warnaTeks,
+  onPress,
+  a11y,
+  nonaktif = false,
+}: {
+  label: string;
+  ikon?: ComponentProps<typeof Ionicons>['name'];
+  latar: string;
+  garis?: string;
+  bayangan: string;
+  warnaTeks: string;
+  onPress: () => void;
+  a11y: string;
+  nonaktif?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={nonaktif}
+      style={[styles.cepat, nonaktif && { opacity: 0.45 }]}
+      accessibilityRole="button"
+      accessibilityLabel={a11y}
+      accessibilityState={{ disabled: nonaktif }}
+    >
+      {({ pressed }) => (
+        <>
+          <View style={[styles.cepatBayangan, { backgroundColor: bayangan }]} />
+          <View
+            style={[
+              styles.cepatMuka,
+              { backgroundColor: latar },
+              garis ? { borderWidth: 2, borderColor: garis } : null,
+              pressed && { transform: [{ translateY: TURUN_CEPAT }] },
+            ]}
+          >
+            {ikon && <Ionicons name={ikon} size={18} color={warnaTeks} />}
+            <Text style={[styles.cepatTeks, { color: warnaTeks }]} numberOfLines={1} adjustsFontSizeToFit>
+              {label}
+            </Text>
+          </View>
+        </>
       )}
-    </ScrollView>
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   latar: { flex: 1, backgroundColor: warna.latar },
-  isi: { padding: 18, paddingBottom: 48 },
+  isi: { padding: 20, paddingBottom: 48, gap: 16 },
+  kolom: { flex: 1 },
 
-  label: { fontWeight: '700', color: warna.teks, marginTop: 14, marginBottom: 8 },
-  catatan: { color: warna.teksRedup, fontSize: 12, lineHeight: 18, marginTop: 6 },
-  barisPil: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  mati: { opacity: 0.4 },
-
-  pil: {
-    minHeight: 44, paddingHorizontal: 16, borderRadius: 999, borderWidth: 1,
-    borderColor: warna.garis, backgroundColor: '#fff', justifyContent: 'center',
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  kembali: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: warna.garis,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  pilAktif: { backgroundColor: warna.gelap, borderColor: warna.gelap },
-  pilTeks: { fontWeight: '700', color: warna.teks },
-  pilTeksAktif: { color: '#fff' },
+  judulLayar: { flex: 1, fontFamily: font.judul, fontSize: 22, color: warna.teks },
 
-  input: {
-    backgroundColor: '#fff', borderRadius: 12, borderWidth: 1, borderColor: '#D6CFC7',
-    paddingHorizontal: 14, paddingVertical: 12, color: warna.teks, minHeight: 48,
+  kartu: { borderRadius: 22, padding: 16, gap: 14 },
+  grup: { gap: 8 },
+  labelGrup: { fontFamily: font.tebal, fontSize: 13, color: warna.teks },
+  barisPilihan: { flexDirection: 'row', gap: 8 },
+  catatan: { fontFamily: font.isi, fontSize: 12, lineHeight: 18, color: warna.teksRedup },
+
+  judulBaris: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  judulKartu: { fontFamily: font.judul, fontSize: 15, color: warna.teks },
+  pil: { backgroundColor: warna.garis, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  pilTeks: { fontFamily: font.judul, fontSize: 12, color: warna.teksRedup },
+
+  barisCepat: { flexDirection: 'row', gap: 8 },
+  cepat: { flex: 1, height: TINGGI_CEPAT + TURUN_CEPAT },
+  cepatBayangan: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: TURUN_CEPAT,
+    height: TINGGI_CEPAT,
+    borderRadius: 14,
   },
-  inputPerintah: { minHeight: 130, textAlignVertical: 'top', fontFamily: fontKode },
-  inputBesar: { minHeight: 90, textAlignVertical: 'top' },
-
-  tombolKecil: {
-    minHeight: 44, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1,
-    borderColor: warna.garis, backgroundColor: '#fff', justifyContent: 'center', alignSelf: 'flex-start',
-    marginTop: 8,
+  cepatMuka: {
+    height: TINGGI_CEPAT,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingHorizontal: 6,
   },
-  tombolKecilTeks: { fontWeight: '700', color: warna.teks },
+  cepatTeks: { flexShrink: 1, fontFamily: font.judul, fontSize: 14 },
 
-  opsi: {
-    backgroundColor: warna.kartu, borderRadius: 14, borderWidth: 1,
-    borderColor: warna.garis, padding: 10, marginBottom: 10,
+  lipat: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    borderRadius: 14,
+    backgroundColor: warna.kotakKode,
   },
-  opsiBenar: { borderColor: warna.hijau, borderWidth: 2, backgroundColor: '#ECFDF5' },
-  opsiAtas: { flexDirection: 'row', alignItems: 'center' },
-  radio: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
-  radioDalam: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#6B625B' },
-  radioDalamAktif: { backgroundColor: warna.hijau, borderColor: warna.hijau },
-  opsiHuruf: { width: 22, fontWeight: '800', color: warna.teksRedup },
-  opsiInput: { flex: 1 },
-  hapusOpsi: { minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' },
-  hapusOpsiTeks: { color: '#B91C1C', fontWeight: '700' },
+  lipatTeks: { flex: 1, fontFamily: font.tebal, fontSize: 14, color: warna.teks },
+  editTeks: { gap: 8 },
+  inputPerintah: {
+    minHeight: 130,
+    textAlignVertical: 'top',
+    fontFamily: fontKode,
+    fontSize: 14,
+    color: warna.teks,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: warna.garis,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
 
-  kotakGalat: { backgroundColor: '#FEE2E2', borderRadius: 14, padding: 14, marginTop: 16 },
-  galatJudul: { color: '#B91C1C', fontWeight: '800', marginBottom: 4 },
-  galatTeks: { color: '#B91C1C', lineHeight: 20 },
+  opsi: { gap: 4 },
+  opsiAtas: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  huruf: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: warna.garis,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  hurufBenar: { backgroundColor: warna.hijau, borderColor: warna.hijau },
+  hurufTeks: { fontFamily: font.judul, fontSize: 16, color: warna.teks },
+  opsiAksi: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingLeft: 54 },
+  tautan: { minHeight: 44, justifyContent: 'center' },
+  tautanTeks: { fontFamily: font.tebal, fontSize: 13, color: warna.biru },
+
+  kotakGalat: {
+    flexDirection: 'row',
+    gap: 10,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    padding: 12,
+  },
+  galatJudul: { fontFamily: font.judul, fontSize: 13, color: '#B91C1C', marginBottom: 2 },
+  galatTeks: { fontFamily: font.isi, fontSize: 13, lineHeight: 19, color: '#B91C1C' },
 
   kotakPeringatan: {
-    backgroundColor: warna.kotakKode, borderRadius: 14, borderWidth: 1,
-    borderColor: '#F5C9B5', padding: 14, marginTop: 16,
+    flexDirection: 'row',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: '#FED7AA',
+    padding: 12,
   },
-  peringatanJudul: { color: '#7C2D12', fontWeight: '800', marginBottom: 4 },
-  peringatanTeks: { color: '#7C2D12', lineHeight: 20 },
+  peringatanJudul: { fontFamily: font.judul, fontSize: 13, color: '#9A3412', marginBottom: 2 },
+  peringatanTeks: { fontFamily: font.isi, fontSize: 13, lineHeight: 19, color: warna.teks },
 
-  kode: { backgroundColor: warna.gelap, borderRadius: 16, padding: 16, marginTop: 16 },
-  kodeJudul: { color: '#5EEAD4', fontWeight: '800', fontSize: 12, letterSpacing: 0.5, marginBottom: 8 },
-  kodeBaris: { color: '#E2E8F0', fontFamily: fontKode, fontSize: 13, lineHeight: 22 },
-  kodeLangkah: { color: '#94A3B8', fontFamily: fontKode, fontSize: 12, lineHeight: 20 },
-  garis: { height: 1, backgroundColor: 'rgba(255,255,255,0.15)', marginVertical: 10 },
-
-  tombolSimpan: {
-    backgroundColor: warna.hijau, borderRadius: 14, minHeight: 52,
-    alignItems: 'center', justifyContent: 'center', marginTop: 20,
-  },
-  tombolSimpanTeks: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  info: { flexDirection: 'row', gap: 6, alignItems: 'flex-start' },
 });

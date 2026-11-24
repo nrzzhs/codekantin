@@ -228,8 +228,8 @@ export default function App() {
                   component={FormSoalScreen}
                   options={({ route }: { route: { params?: any } }) => ({
                     title: route.params?.soal ? 'Ubah Soal' : 'Soal Baru',
-                    headerStyle: { backgroundColor: warna.latar },
-                    headerShadowVisible: false,
+                    // Layar ini punya header sendiri dengan tombol kembali
+                    headerShown: false,
                   })}
                 />
               )}

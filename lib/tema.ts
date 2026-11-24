@@ -19,6 +19,10 @@ export const warna = {
   kotakKode: '#FAF1EC',
   // Teks hijau di atas hijauMuda: #15803D di #CCFBF1 hanya 4,45:1, jadi pakai yang lebih tua
   hijauTua: '#166534',
+  // Ungu = Mode Tebak (biru = Queue, oranye = Stack)
+  ungu: '#6D28D9',
+  unguMuda: '#EDE9FE',
+  unguTua: '#4C1D95',
 };
 
 // Nama keluarga font = nama kunci yang dimuat useFonts di App.tsx.

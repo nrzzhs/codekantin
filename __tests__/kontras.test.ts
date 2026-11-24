@@ -33,6 +33,16 @@ const PASANGAN: [string, string, string][] = [
   ['teks tombol nonaktif', warna.teksRedup, warna.garis],
   ['putih di tombol utama hijau', PUTIH, warna.hijau],
   ['teks syarat terpenuhi di kartu putih', warna.hijauTeks, PUTIH],
+  // Tampilan tahap 3 (Beranda)
+  ['chip ungu Tebak', warna.ungu, warna.unguMuda],
+  ['putih di tombol Tebak', PUTIH, warna.ungu],
+  ['chip biru Queue', warna.biru, warna.biruMuda],
+  ['chip Stack & pil poin', warna.persikTeks, warna.oranyeMuda],
+  ['angka XP di kartu maskot', '#CBD5E1', warna.gelap],
+  ['petunjuk "Ketuk Koki Piri"', '#94A3B8', warna.gelap],
+  ['teks pil Lv di toska', warna.gelap, '#5EEAD4'],
+  ['putih di tombol Stack', PUTIH, warna.oranye],
+  ['putih di tombol Queue', PUTIH, warna.biru],
 ];
 
 describe('Kontras warna (WCAG AA, teks normal minimal 4,5:1)', () => {

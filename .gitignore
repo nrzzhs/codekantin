@@ -41,3 +41,6 @@ yarn-error.*
 /android
 .claude/
 .env
+
+codekantin-assets/
+tahap1-2/
